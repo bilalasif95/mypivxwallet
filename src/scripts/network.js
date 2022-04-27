@@ -1,8 +1,8 @@
-'use strict';
+// 'use strict';
 
 import { networkEnabled, disableNetwork } from "./settings";
 import { createAlert } from "./misc";
-import { domBalanceReload, domBalanceReloadStaking, domGuiBalance, domAvailToDelegate, domGuiBalanceStaking, domGuiBalanceBoxStaking, domAvailToUndelegate, domAddress1s, domTxOutput, domSimpleTXs, domValue1s } from "../App";
+import { domBalanceReload, domBalanceReloadStaking, domGuiBalanceRef, domAvailToDelegate, domGuiBalanceStaking, domGuiBalanceBoxStaking, domAvailToUndelegate, domAddress1s, domTxOutput, domSimpleTXs, domValue1s } from "../App";
 
 function networkError(i18n) {
   if (disableNetwork()) {
@@ -59,7 +59,7 @@ if (networkEnabled) {
           if (updateGUI) {
             // Set the balance, and adjust font-size for large balance strings
             const nLen = (nBalance / COIN).toString().length;
-            domGuiBalance.innerText = (nBalance / COIN).toFixed(nLen >= 4 ? 0 : 2);
+            domGuiBalanceRef.current.innerText = (nBalance / COIN).toFixed(nLen >= 4 ? 0 : 2);
             domAvailToDelegate.innerText = "Available: ~" + (nBalance / COIN).toFixed(2) + " PIV";
           }
 

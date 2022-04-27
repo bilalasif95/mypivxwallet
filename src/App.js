@@ -11,6 +11,24 @@ import { bitjs } from "./scripts/bitTrx";
 import { createAlert } from "./scripts/misc";
 // import { jdenticon } from "./scripts/libs/jdenticon.min";
 
+const privateKeyRef = createRef();
+const domGenKeyWarningRef = createRef();
+const domPrivateTxtRef = createRef();
+const domGuiAddressRef = createRef();
+const domGuiBalanceRef = createRef();
+const domGuiBalanceBoxRef = createRef();
+const domPrivateQrRef = createRef();
+const domPublicQrRef = createRef();
+const domModalQrLabelRef = createRef();
+const domModalQRRef = createRef();
+const domIdenticonRef = createRef();
+const domGuiWalletRef = createRef();
+const domPrefixRef = createRef();
+const domGenerateWalletRef = createRef();
+const domImportWalletRef = createRef();
+const domGenVanityWalletRef = createRef();
+const domAccessWalletRef = createRef();
+
 function App(props) {
   var privateKeyForTransactions;
   var publicKeyForNetwork;
@@ -70,8 +88,6 @@ function App(props) {
   // const domGuiWallet = document.getElementById('guiWallet');
   // const domNetwork = document.getElementById('Network');
   // const domDebug = document.getElementById('Debug');
-  const domGuiBalance = document.getElementById("guiBalance");
-  const domGuiBalanceBox = document.getElementById("guiBalanceBox");
   // const domBalanceReload = document.getElementById("balanceReload");
   // const domBalanceReloadStaking = document.getElementById("balanceReloadStaking");
   const domGuiBalanceStaking = document.getElementById("guiBalanceStaking");
@@ -82,21 +98,11 @@ function App(props) {
   const domAddress1s = document.getElementById("address1s");
   const domValue1s = document.getElementById("value1s");
   const domGuiViewKey = document.getElementById('guiViewKey');
-  const domPrivateTxt = document.getElementById('PrivateTxt');
-  const domPrivateQr = document.getElementById('PrivateQR');
-  const domPublicQr = document.getElementById('PublicQR');
   // const domModalQR = document.getElementById('ModalQR');
   // const domModalQrLabel = document.getElementById('ModalQRLabel');
   const [prefix, setPrefix] = useState(PUBKEY_PREFIX);
-  const domPrefix = document.getElementById('prefix');
   const domWalletToggle = document.getElementById("wToggle");
-  const domGenerateWallet = document.getElementById('generateWallet');
-  const domImportWallet = document.getElementById('importWallet');
-  const domGenVanityWallet = document.getElementById('generateVanityWallet');
-  const domAccessWallet = document.getElementById('accessWallet');
   const domVanityUiButtonTxt = document.getElementById("vanButtonText");
-  const domGenKeyWarning = document.getElementById('genKeyWarning');
-  const domGuiAddress = document.getElementById('guiAddress');
   const domGenIt = document.getElementById("genIt");
   const domHumanReadable = document.getElementById("HumanReadable");
   const domTxOutput = document.getElementById("transactionFinal");
@@ -114,7 +120,7 @@ function App(props) {
     if (updateGUI) {
       // Set the balance, and adjust font-size for large balance strings
       const nLen = (nBalance / COIN).toString().length;
-      domGuiBalance.innerText = (nBalance / COIN).toFixed(nLen >= 4 ? 0 : 2);
+      domGuiBalanceRef.current.innerText = (nBalance / COIN).toFixed(nLen >= 4 ? 0 : 2);
       domAvailToDelegate.innerText = "Available: ~" + (nBalance / COIN).toFixed(2) + " PIV";
     }
 
@@ -214,55 +220,55 @@ function App(props) {
   function toggleKeyView() {
     viewPrivKey = !viewPrivKey;
     domGuiViewKey.innerHTML = viewPrivKey ? 'Privkey QR' : 'Pubkey QR';
-    domPrivateTxt.style.display = viewPrivKey ? 'block' : 'none';
-    domPrivateQr.style.display = viewPrivKey ? 'block' : 'none';
-    domPublicQr.style.display = !viewPrivKey ? 'block' : 'none';
+    domPrivateTxtRef.current.style.display = viewPrivKey ? 'block' : 'none';
+    domPrivateQrRef.current.style.display = viewPrivKey ? 'block' : 'none';
+    domPublicQrRef.current.style.display = !viewPrivKey ? 'block' : 'none';
   }
 
   function hideAllWalletOptions() {
     // Hide and Reset the Vanity address input
     setPrefix(PUBKEY_PREFIX);
-    domPrefix.style.display = 'none';
+    domPrefixRef.current.style.display = 'none';
     // Hide 'generate wallet'
-    domGenerateWallet.style.display = 'none';
+    domGenerateWalletRef.current.style.display = 'none';
     // Hide 'import wallet'
-    domImportWallet.style.display = 'none';
+    domImportWalletRef.current.style.display = 'none';
     // Hide 'vanity wallet'
-    domGenVanityWallet.style.display = 'none';
+    domGenVanityWalletRef.current.style.display = 'none';
     // Hide 'access wallet'
-    domAccessWallet.style.display = 'none';
+    domAccessWalletRef.current.style.display = 'none';
   }
 
   function toggleWallet() {
     var toggle = domWalletToggle.innerHTML;
     // Hide and Reset the Vanity address input
     setPrefix(PUBKEY_PREFIX);
-    domPrefix.style.display = 'none';
+    domPrefixRef.current.style.display = 'none';
     if (toggle === "Access My Wallet") {
       if (!hasEncryptedWallet()) {
         // No local wallet found
-        domGenerateWallet.style.display = 'none';
-        domImportWallet.style.display = 'block';
+        domGenerateWalletRef.current.style.display = 'none';
+        domImportWalletRef.current.style.display = 'block';
         domWalletToggle.innerHTML = "Create A New Wallet";
         return;
       }
       // We have a local wallet! Display the decryption prompt
-      decryptWallet().then(hasWallet => {
+      decryptWallet(i18n).then(hasWallet => {
         if (hasWallet) {
           hideAllWalletOptions();
         } else {
-          domGenerateWallet.style.display = 'block';
-          domImportWallet.style.display = 'none';
+          domGenerateWalletRef.current.style.display = 'block';
+          domImportWalletRef.current.style.display = 'none';
           domWalletToggle.innerHTML = "Access My Wallet";
         }
       }).catch(e => {
-        domGenerateWallet.style.display = 'none';
-        domImportWallet.style.display = 'block';
+        domGenerateWalletRef.current.style.display = 'none';
+        domImportWalletRef.current.style.display = 'block';
         domWalletToggle.innerHTML = "Create A New Wallet";
       });
     } else {
-      domGenerateWallet.style.display = 'block';
-      domImportWallet.style.display = 'none';
+      domGenerateWalletRef.current.style.display = 'block';
+      domImportWalletRef.current.style.display = 'none';
       domWalletToggle.innerHTML = "Access My Wallet";
     }
   }
@@ -272,7 +278,7 @@ function App(props) {
     if (!prefix.length) return setPrefix(PUBKEY_PREFIX);
     if (!prefix.startsWith(PUBKEY_PREFIX)) {
       // Prefix doesnt match, splice it into the string
-      setPrefix(PUBKEY_PREFIX + domPrefix.value.substr(1));
+      setPrefix(PUBKEY_PREFIX + domPrefixRef.current.value.substr(1));
     }
   }
 
@@ -286,7 +292,7 @@ function App(props) {
       thread.terminate();
     }
     while (arrWorkers.length) arrWorkers.pop();
-    domPrefix.disabled = false;
+    domPrefixRef.current.disabled = false;
     domVanityUiButtonTxt.innerText = 'Create A Vanity Wallet';
     clearInterval(vanUiUpdater);
   }
@@ -295,13 +301,13 @@ function App(props) {
     if (isVanityGenerating) return stopSearch();
     if (typeof (Worker) === "undefined") return alert(i18n.t('browser'));
     // Generate a vanity address with the given prefix
-    if (prefix.length === 0 || domPrefix.style.display === 'none') {
+    if (prefix.length === 0 || domPrefixRef.current.style.display === 'none') {
       // No prefix, display the intro!
-      domPrefix.placeholder = 'Custom Prefix (' + PUBKEY_PREFIX + ' ...)';
-      domPrefix.style.display = 'block';
-      domGenKeyWarning.style.display = 'none';
-      domPrivateTxt.innerHTML = "~";
-      domGuiAddress.innerHTML = "~";
+      domPrefixRef.current.placeholder = 'Custom Prefix (' + PUBKEY_PREFIX + ' ...)';
+      domPrefixRef.current.style.display = 'block';
+      domGenKeyWarningRef.current.style.display = 'none';
+      domPrivateTxtRef.current.innerHTML = "~";
+      domGuiAddressRef.current.innerHTML = "~";
     } else {
       // Ensure the input is base58 compatible
       for (const char of prefix) {
@@ -310,7 +316,7 @@ function App(props) {
       // We also don't want users to be mining addresses for years... so cap the letters to four until the generator is more optimized
       if (prefix.length > 6) return alert(i18n.t('long_name'));
       isVanityGenerating = true;
-      domPrefix.disabled = true;
+      domPrefixRef.current.disabled = true;
       // Cache a lowercase equivilent for lower-entropy comparisons (a case-insensitive search is ALOT faster!) and strip accidental spaces
       const nInsensitivePrefix = prefix.toLowerCase().replace(/ /g, "");
       const nPrefixLen = nInsensitivePrefix.length;
@@ -320,7 +326,7 @@ function App(props) {
       const nThreads = Math.max(Math.floor(window.navigator.hardwareConcurrency * 0.75), 1);
       console.log('Spawning ' + nThreads + ' vanity search threads!');
       while (arrWorkers.length < nThreads) {
-        arrWorkers.push(new Worker("scripts/vanitygen_worker.js"));
+        arrWorkers.push(new Worker("./scripts/vanitygen_worker.js"));
         arrWorkers[arrWorkers.length - 1].onmessage = (event) => checkResult(event.data);
       }
 
@@ -335,8 +341,8 @@ function App(props) {
         if (data.pub.substr(0, nPrefixLen).toLowerCase() === nInsensitivePrefix) {
           importWallet(data.priv, true);
           stopSearch();
-          domGuiBalance.innerHTML = "0";
-          domGuiBalanceBox.style.fontSize = "x-large";
+          domGuiBalanceRef.current.innerHTML = "0";
+          domGuiBalanceBoxRef.current.style.fontSize = "x-large";
           return console.log("VANITY: Found an address after " + attempts + " attempts!");
         }
       }
@@ -635,7 +641,7 @@ function App(props) {
     if (!networkEnabled) return console.warn(i18n.t('offline_mode'));
 
     // Update identicon
-    // domIdenticon.dataset.jdenticonValue = publicKeyForNetwork;
+    domIdenticonRef.current.dataset.jdenticonValue = publicKeyForNetwork;
 
     // jdenticon();
 
@@ -675,7 +681,6 @@ function App(props) {
   });
 
   setInterval(refreshChainData, 15000);
-  // domPrefix.value = PUBKEY_PREFIX;
 
   return (
     <div id="page-container" className="home-hero">
@@ -740,8 +745,8 @@ function App(props) {
                 </button>
               </div>
               <div className="modal-body center-text">
-                <p id="ModalQRLabel" className="modal-label"></p>
-                <div id="ModalQR" className="auto-fit"></div>
+                <p ref={domModalQrLabelRef} id="ModalQRLabel" className="modal-label"></p>
+                <div ref={domModalQRRef} id="ModalQR" className="auto-fit"></div>
               </div>
             </div>
           </div>
@@ -863,7 +868,7 @@ function App(props) {
 
 
                 {/* GENERATE WALLET  */}
-                <div id='generateWallet' className="dashboard-item">
+                <div ref={domGenerateWalletRef} id='generateWallet' className="dashboard-item">
                   <div className="container">
 
                     <div className="coinstat-icon">
@@ -876,7 +881,7 @@ function App(props) {
                     </div>
 
 
-                    <button className="pivx-button-big" onClick={() => generateWallet()}>
+                    <button className="pivx-button-big" onClick={() => generateWallet(i18n)}>
                       <span className="buttoni-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 70"><path d="M3.497 25.717C1.401 25.588 0 23.847 0 21.753v-2.535c0-.775.149-1.593.925-1.593h22.719c2.173 0 3.941 1.861 3.941 4.034 0 2.174-1.769 3.988-3.941 3.988l-20.207.048c-.02 0 .08.023.06.022z"></path><path d="M5.229 69.625C4.455 69.625 4 68.494 4 67.719V38.661c0-1.911 1.447-3.731 3.258-3.989.175-.029.285-.047.483-.047h21.525c7.137 0 12.751-5.86 12.751-13.027 0-7.096-5.528-12.841-12.586-13.177-.002 0-.671.016-1.41.016l-20.335.066C5.529 8.373 4 6.652 4 4.558V2.023C4 1.247 4.407.625 5.183.625h24.059c11.57 0 20.654 9.546 20.706 21.104 0 9.378-6.307 17.727-15.337 20.311-1.622.445-3.122.705-4.735.778L12 42.842v22.485c0 2.156-2.141 4.298-4.235 4.298H5.229z"></path></svg></span>
                       <span className="buttoni-text">{i18n.t('create a new wallet')}</span>
                       <span className="buttoni-arrow"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M23.328 16.707L13.121 26.914a.5.5 0 01-.707 0l-2.828-2.828a.5.5 0 010-.707L16.964 16 9.586 8.621a.5.5 0 010-.707l2.828-2.828a.5.5 0 01.707 0l10.207 10.207a1 1 0 010 1.414z"></path></svg></span>
@@ -889,12 +894,12 @@ function App(props) {
                 {/* WALLET FUNCTIONALITIES  */}
 
                 {/* WARNING  */}
-                <div id='genKeyWarning' style={{ display: 'none' }} className="alert alert-danger col-md-12" role="alert">
+                <div ref={domGenKeyWarningRef} id='genKeyWarning' style={{ display: 'none' }} className="alert alert-danger col-md-12" role="alert">
                   <div>
                     <p><b><span>{i18n.t('WARNING')}</span></b><span>{i18n.t('save you keys')}</span><br />
                       <span>{i18n.t('encrypt')}</span><br /></p>
                   </div>
-                  <button className="pivx-button-big" onClick={() => encryptWallet()}>
+                  <button className="pivx-button-big" onClick={() => encryptWallet(i18n)}>
                     <span className="buttoni-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M85.967 10.65l-32.15-9.481a13.466 13.466 0 00-7.632 0l-32.15 9.48C11.661 11.351 10 13.567 10 16.042v26.623c0 12.321 3.67 24.186 10.609 34.31 6.774 9.885 16.204 17.49 27.264 21.99a5.612 5.612 0 004.251 0c11.061-4.5 20.491-12.104 27.266-21.99C86.329 66.85 90 54.985 90 42.664V16.042a5.656 5.656 0 00-4.033-5.392zM69 68.522C69 70.907 67.03 72 64.584 72H34.092C31.646 72 30 70.907 30 68.522v-23.49C30 42.647 31.646 41 34.092 41H37v-9.828C37 24.524 41.354 18.5 49.406 18.5 57.37 18.5 62 24.066 62 31.172V41h2.584C67.03 41 69 42.647 69 45.032v23.49zM58 41v-9.828c0-4.671-3.708-8.472-8.5-8.472-4.791 0-8.5 3.8-8.5 8.472V41h17z"></path></svg></span>
 
                     <span className="buttoni-text">{i18n.t('Encrypt Wallet')}</span>
@@ -907,14 +912,14 @@ function App(props) {
                 <br />
 
                 {/* WALLET FEATURES  */}
-                <div id="guiWallet" style={{ display: 'none' }}>
+                <div ref={domGuiWalletRef} id="guiWallet" style={{ display: 'none' }}>
                   <div id="bcg-wallet-box">
                     <div id="headline-balance">
                       <div id="balance-box" className="large-box">
                         <div id="window-icon-piv">
                           <div id="piv-ring"></div>
                           <div id="number-piv">
-                            <p id="guiBalanceBox"><b id="guiBalance">~</b> PIV</p>
+                            <p ref={domGuiBalanceBoxRef} id="guiBalanceBox"><b ref={domGuiBalanceRef} id="guiBalance">~</b> PIV</p>
                           </div>
                         </div>
                         <div id="bal-title">
@@ -930,10 +935,10 @@ function App(props) {
                         </div>
                         <div id="box-info-address">
                           <div id="ring">
-                            <canvas id="identicon" className="innerShadow" width="65" height="65" data-jdenticon-value=""></canvas>
+                            <canvas ref={domIdenticonRef} id="identicon" className="innerShadow" width="65" height="65" data-jdenticon-value=""></canvas>
                           </div>
                           <div id="address-info">
-                            <b id="guiAddress">~</b>
+                            <b ref={domGuiAddressRef} id="guiAddress">~</b>
                             <b id="guiQRButton">
                               <i data-toggle="modal" data-target="#qrModal" className="fas fa-qrcode fa-stacked-ptr"></i>
                               <i onClick={() => toClipboard('guiAddress', 'guiAddressCopy')} id="guiAddressCopy" className="fas fa-clipboard fa-stacked-ptr"></i>
@@ -942,9 +947,9 @@ function App(props) {
                         </div>
                         <div id="pubkey-padd">
                           <div id="pubkey-box" className="col-md-4 desktop-pubkey">
-                            <div id="PrivateQR" className="margin-padded-qr" style={{ display: 'none' }}><img src="" alt="PrivateQR" width="82" height="82" /></div>
-                            <div id="PublicQR" className="margin-padded-qr" style={{ display: 'block' }}><img src="" alt="PublicQR" width="82" height="82" /></div>
-                            <textarea id="PrivateTxt" style={{ display: 'none' }} disabled="" className="form-control private-key-area"></textarea>
+                            <div ref={domPrivateQrRef} id="PrivateQR" className="margin-padded-qr" style={{ display: 'none' }}><img src="" alt="PrivateQR" width="82" height="82" /></div>
+                            <div ref={domPublicQrRef} id="PublicQR" className="margin-padded-qr" style={{ display: 'block' }}><img src="" alt="PublicQR" width="82" height="82" /></div>
+                            <textarea ref={domPrivateTxtRef} id="PrivateTxt" style={{ display: 'none' }} disabled="" className="form-control private-key-area"></textarea>
                             <button className="pivx-button-big" onClick={() => toggleKeyView()}>
                               <span className="buttoni-icon"><i className="far fa-eye fa-tiny-margin"></i></span>
                               <span className="buttoni-text" id="guiViewKey">{i18n.t('QR')}</span>
@@ -961,7 +966,7 @@ function App(props) {
                 {/* WALLET FUNCTIONALITIES  */}
 
                 {/* GENERATE VANITY WALLET  */}
-                <div id='generateVanityWallet' className="dashboard-item">
+                <div ref={domGenVanityWalletRef} id='generateVanityWallet' className="dashboard-item">
                   <div className="container">
 
                     <div className="coinstat-icon">
@@ -975,7 +980,7 @@ function App(props) {
                     </div>
 
 
-                    <input style={{ display: 'none' }} value={prefix} type="text" id='prefix' placeholder="Address Prefix" onKeyUp={checkVanity} onChange={checkVanity} />
+                    <input ref={domPrefixRef} style={{ display: 'none' }} value={prefix} type="text" id='prefix' placeholder="Address Prefix" onKeyUp={() => checkVanity()} onChange={() => checkVanity()} />
 
                     <button className="pivx-button-big" onClick={() => generateVanityWallet()}>
                       <span className="buttoni-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 70"><path d="M3.497 25.717C1.401 25.588 0 23.847 0 21.753v-2.535c0-.775.149-1.593.925-1.593h22.719c2.173 0 3.941 1.861 3.941 4.034 0 2.174-1.769 3.988-3.941 3.988l-20.207.048c-.02 0 .08.023.06.022z"></path><path d="M5.229 69.625C4.455 69.625 4 68.494 4 67.719V38.661c0-1.911 1.447-3.731 3.258-3.989.175-.029.285-.047.483-.047h21.525c7.137 0 12.751-5.86 12.751-13.027 0-7.096-5.528-12.841-12.586-13.177-.002 0-.671.016-1.41.016l-20.335.066C5.529 8.373 4 6.652 4 4.558V2.023C4 1.247 4.407.625 5.183.625h24.059c11.57 0 20.654 9.546 20.706 21.104 0 9.378-6.307 17.727-15.337 20.311-1.622.445-3.122.705-4.735.778L12 42.842v22.485c0 2.156-2.141 4.298-4.235 4.298H5.229z"></path></svg></span>
@@ -990,7 +995,7 @@ function App(props) {
                 <br />
 
                 {/* ACCESS WALLET  */}
-                <div id="accessWallet" className="dashboard-item" style={{ marginBottom: '100px' }}>
+                <div ref={domAccessWalletRef} id="accessWallet" className="dashboard-item" style={{ marginBottom: '100px' }}>
                   <div className="container">
 
                     <div className="coinstat-icon">
@@ -1007,9 +1012,9 @@ function App(props) {
 
                     {/* IMPORT WALLET  */}
                     <input className="hide-element" type="text" id="clipboard" />
-                    <div id='importWallet' style={{ display: 'none' }}>
-                      <input type="text" id='privateKey' placeholder="Private Key" />
-                      <button className="pivx-button-big" onClick={() => importWallet()}>
+                    <div ref={domImportWalletRef} id='importWallet' style={{ display: 'none' }}>
+                      <input ref={privateKeyRef} type="text" id='privateKey' placeholder="Private Key" />
+                      <button className="pivx-button-big" onClick={() => importWallet(i18n)}>
                         <span className="buttoni-icon"><i className="fas fa-file-upload fa-tiny-margin"></i></span>
                         <span className="buttoni-text">{i18n.t('Import Wallet')}</span>
                         <span className="buttoni-arrow"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M23.328 16.707L13.121 26.914a.5.5 0 01-.707 0l-2.828-2.828a.5.5 0 010-.707L16.964 16 9.586 8.621a.5.5 0 010-.707l2.828-2.828a.5.5 0 01.707 0l10.207 10.207a1 1 0 010 1.414z"></path></svg></span>
@@ -1214,11 +1219,9 @@ function App(props) {
 }
 
 export default withTranslation()(App);
-export const domPrivKey = document.getElementById("privateKey");
+export { privateKeyRef, domGenKeyWarningRef, domPrivateTxtRef, domGuiAddressRef, domGuiBalanceRef, domGuiBalanceBoxRef, domPrivateQrRef, domPublicQrRef, domModalQrLabelRef, domModalQRRef, domIdenticonRef, domGuiWalletRef, domPrefixRef, domGenerateWalletRef, domImportWalletRef, domGenVanityWalletRef, domAccessWalletRef };
 export const domBalanceReload = document.getElementById("balanceReload");
 export const domBalanceReloadStaking = document.getElementById("balanceReloadStaking");
-export const domGuiBalance = document.getElementById("guiBalance");
-export const domGuiBalanceBox = document.getElementById("guiBalanceBox");
 export const domAvailToDelegate = document.getElementById('availToDelegate');
 export const domGuiBalanceStaking = document.getElementById("guiBalanceStaking");
 export const domGuiBalanceBoxStaking = document.getElementById("guiBalanceBoxStaking");
@@ -1227,20 +1230,6 @@ export const domAddress1s = document.getElementById("address1s");
 export const domTxOutput = document.getElementById("transactionFinal");
 export const domSimpleTXs = document.getElementById("simpleTransactions");
 export const domValue1s = document.getElementById("value1s");
-export const domGuiAddress = document.getElementById('guiAddress');
-export const domGuiWallet = document.getElementById('guiWallet');
-export const domPrivateTxt = document.getElementById('PrivateTxt');
-export const domPrivateQr = document.getElementById('PrivateQR');
-export const domPublicQr = document.getElementById('PublicQR');
-export const domModalQrLabel = document.getElementById('ModalQRLabel');
-export const domModalQR = document.getElementById('ModalQR');
 export const domGuiViewKey = document.getElementById('guiViewKey');
-export const domIdenticon = document.getElementById("identicon");
-export const domGenKeyWarning = document.getElementById('genKeyWarning');
-export const domPrefix = document.getElementById('prefix');
-export const domGenerateWallet = document.getElementById('generateWallet');
-export const domImportWallet = document.getElementById('importWallet');
-export const domGenVanityWallet = document.getElementById('generateVanityWallet');
-export const domAccessWallet = document.getElementById('accessWallet');
 export const domNetwork = document.getElementById('Network');
 export const domDebug = document.getElementById('Debug');

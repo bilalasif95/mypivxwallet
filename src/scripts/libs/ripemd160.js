@@ -82,7 +82,7 @@ var processBlock = function (H, M, offset) {
   er = el = H[4];
   // Computation
   var t;
-  for (var i = 0; i < 80; i += 1) {
+  for (let i = 0; i < 80; i += 1) {
     t = (al + M[offset + zl[i]]) | 0;
     if (i < 16) {
       t += f1(bl, cl, dl) + hl[0];
@@ -178,7 +178,7 @@ function ripemd160(message) {
   }
 
   // Swap endian
-  for (var i = 0; i < 5; i++) {
+  for (let i = 0; i < 5; i++) {
     // Shortcut
     var H_i = H[i];
 

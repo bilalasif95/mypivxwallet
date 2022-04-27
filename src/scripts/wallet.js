@@ -1,11 +1,11 @@
-import { domPrivKey, domGuiAddress, domGuiWallet, domPrivateTxt, domPrivateQr, domPublicQr, domModalQrLabel, domModalQR, domGuiViewKey, domIdenticon, domGenKeyWarning, domPrefix, domGenerateWallet, domImportWallet, domGenVanityWallet, domAccessWallet, domGuiBalance, domGuiBalanceBox } from "../../src/App";
+import { privateKeyRef, domGuiAddressRef, domGuiWalletRef, domPrivateTxtRef, domPrivateQrRef, domPublicQrRef, domModalQrLabelRef, domModalQRRef, domGuiViewKey, domIdenticonRef, domGenKeyWarningRef, domPrefixRef, domGenerateWalletRef, domImportWalletRef, domGenVanityWalletRef, domAccessWalletRef, domGuiBalanceRef, domGuiBalanceBoxRef } from "../../src/App";
 import { debug, networkEnabled } from "../scripts/settings";
 import { getPublicKey } from "./libs/noble-secp256k1";
-import { Secp256k1 } from "./libs/secp256k1";
+import { uint256 } from "./libs/secp256k1";
 import jsSHA from "./libs/sha256";
 import { ripemd160 } from "./libs/ripemd160";
 import { qrcode } from "./libs/qrcode";
-import { jdenticon } from "./libs/jdenticon.min";
+// import { jdenticon } from "./libs/jdenticon.min";
 import { getUnspentTransactions } from "./network";
 import { encrypt, decrypt } from "./libs/aes-gcm";
 
@@ -77,9 +77,9 @@ const PUBKEY_ADDRESS = 30;
 // const nSecp256k1 = nobleSecp256k1.default;
 // document.getElementById('dcfooter').innerHTML = '© MIT 2022 - Built with 💜 by PIVX Labs - <b style=\'cursor:pointer\' onclick=\'openDonatePage()\'>Donate!</b><br><a href="https://github.com/PIVX-Labs/MyPIVXWallet">MyPIVXWallet</a>';
 // Wallet Import
-export function importWallet(newWif = false, raw = false) {
+export function importWallet(i18n, newWif = false, raw = false) {
   if (walletAlreadyMade !== 0) {
-    var walletConfirm = window.confirm("Do you really want to import a new address? If you haven't saved the last private key, the key will get LOST forever alongside ANY funds with it.");
+    var walletConfirm = window.confirm(i18n.t("Do you really want to import a new address? If you haven't saved the last private key, the key will get LOST forever alongside ANY funds with it."));
   } else {
     walletConfirm = true;
   }
@@ -104,9 +104,9 @@ export function importWallet(newWif = false, raw = false) {
       newWif = to_b58(keyWithChecksum);
     }
     // Wallet Import Format to Private Key
-    const privkeyWIF = newWif || domPrivKey.value;
+    const privkeyWIF = newWif || privateKeyRef.current.value;
     privateKeyForTransactions = privkeyWIF;
-    if (!newWif) domPrivKey.value = "";
+    if (!newWif) privateKeyRef.current.value = "";
     const byteArryConvert = from_b58(privkeyWIF);
     const droplfour = byteArryConvert.slice(0, byteArryConvert.length - 4);
     const key = droplfour.slice(1, droplfour.length);
@@ -120,7 +120,7 @@ export function importWallet(newWif = false, raw = false) {
     }
     // Public Key Derivation
     let nPubkey = Crypto.util.bytesToHex(getPublicKey(privkeyBytes)).substr(2);
-    const pubY = Secp256k1.uint256(nPubkey.substr(64), 16);
+    const pubY = uint256(nPubkey.substr(64), 16);
     nPubkey = nPubkey.substr(0, 64);
     const publicKeyBytesCompressed = Crypto.util.hexToBytes(nPubkey);
     if (pubY.isEven()) {
@@ -152,10 +152,10 @@ export function importWallet(newWif = false, raw = false) {
     publicKeyForNetwork = to_b58(pubKeyPreBase);
 
     // Display Text
-    domGuiAddress.innerHTML = publicKeyForNetwork;
-    domGuiWallet.style.display = 'block';
-    domPrivateTxt.value = privkeyWIF;
-    domGuiAddress.innerHTML = publicKeyForNetwork;
+    domGuiAddressRef.current.innerHTML = publicKeyForNetwork;
+    domGuiWalletRef.current.style.display = 'block';
+    domPrivateTxtRef.current.value = privkeyWIF;
+    domGuiAddressRef.current.innerHTML = publicKeyForNetwork;
 
     // QR Codes
     // Private Key
@@ -164,38 +164,38 @@ export function importWallet(newWif = false, raw = false) {
     const qrPriv = qrcode(typeNumber, errorCorrectionLevel);
     qrPriv.addData(privkeyWIF);
     qrPriv.make();
-    domPrivateQr.innerHTML = qrPriv.createImgTag();
-    domPrivateQr.firstChild.style.borderRadius = '8px';
+    domPrivateQrRef.current.innerHTML = qrPriv.createImgTag();
+    domPrivateQrRef.current.firstChild.style.borderRadius = '8px';
 
     // Public Key
     const qrPub = qrcode(typeNumber, errorCorrectionLevel);
     qrPub.addData('pivx:' + publicKeyForNetwork);
     qrPub.make();
-    domPublicQr.innerHTML = qrPub.createImgTag();
-    domPublicQr.firstChild.style.borderRadius = '8px';
+    domPublicQrRef.current.innerHTML = qrPub.createImgTag();
+    domPublicQrRef.current.firstChild.style.borderRadius = '8px';
     // Pubkey Modal
-    domModalQrLabel.innerHTML = 'pivx:' + publicKeyForNetwork;
-    domModalQR.innerHTML = qrPub.createImgTag();
-    domModalQR.firstChild.style.width = "100%";
-    domModalQR.firstChild.style.height = "auto";
-    domModalQR.firstChild.style.imageRendering = "crisp-edges";
+    domModalQrLabelRef.current.innerHTML = 'pivx:' + publicKeyForNetwork;
+    domModalQRRef.current.innerHTML = qrPub.createImgTag();
+    domModalQRRef.current.firstChild.style.width = "100%";
+    domModalQRRef.current.firstChild.style.height = "auto";
+    domModalQRRef.current.firstChild.style.imageRendering = "crisp-edges";
     document.getElementById('clipboard').value = publicKeyForNetwork;
 
     // Set view key as public and refresh QR code
     viewPrivKey = true;
     viewPrivKey = !viewPrivKey;
     domGuiViewKey.innerHTML = viewPrivKey ? 'Privkey QR' : 'Pubkey QR';
-    domPrivateTxt.style.display = viewPrivKey ? 'block' : 'none';
-    domPrivateQr.style.display = viewPrivKey ? 'block' : 'none';
-    domPublicQr.style.display = !viewPrivKey ? 'block' : 'none';
+    domPrivateTxtRef.current.style.display = viewPrivKey ? 'block' : 'none';
+    domPrivateQrRef.current.style.display = viewPrivKey ? 'block' : 'none';
+    domPublicQrRef.current.style.display = !viewPrivKey ? 'block' : 'none';
 
     // Update identicon
-    domIdenticon.dataset.jdenticonValue = publicKeyForNetwork;
-    jdenticon();
+    domIdenticonRef.current.dataset.jdenticonValue = publicKeyForNetwork;
+    // jdenticon();
 
     if (!newWif) {
       // Hide the encryption warning
-      domGenKeyWarning.style.display = 'block';
+      domGenKeyWarningRef.current.style.display = 'block';
     }
     // Load UTXOs from explorer
     if (networkEnabled)
@@ -210,16 +210,16 @@ const PUBKEY_PREFIX = "D";
 
 function hideAllWalletOptions() {
   // Hide and Reset the Vanity address input
-  domPrefix.value = PUBKEY_PREFIX;
-  domPrefix.style.display = 'none';
+  domPrefixRef.current.value = PUBKEY_PREFIX;
+  domPrefixRef.current.style.display = 'none';
   // Hide 'generate wallet'
-  domGenerateWallet.style.display = 'none';
+  domGenerateWalletRef.current.style.display = 'none';
   // Hide 'import wallet'
-  domImportWallet.style.display = 'none';
+  domImportWalletRef.current.style.display = 'none';
   // Hide 'vanity wallet'
-  domGenVanityWallet.style.display = 'none';
+  domGenVanityWalletRef.current.style.display = 'none';
   // Hide 'access wallet'
-  domAccessWallet.style.display = 'none';
+  domAccessWalletRef.current.style.display = 'none';
 }
 
 // Writes a sequence of Array-like bytes into a location within a Uint8Array
@@ -240,9 +240,9 @@ function getSafeRand() {
 }
 
 // Wallet Generation
-export async function generateWallet(noUI = false) {
+export async function generateWallet(i18n, noUI = false) {
   if (walletAlreadyMade !== 0 && !noUI) {
-    var walletConfirm = window.confirm("Do you really want to generate a new address? If you haven't saved the last private key the key will get lost forever and any funds with it.");
+    var walletConfirm = window.confirm(i18n.t("Do you really want to generate a new address? If you haven't saved the last private key the key will get lost forever and any funds with it."));
   } else {
     walletConfirm = true;
   }
@@ -269,7 +269,7 @@ export async function generateWallet(noUI = false) {
 
     // Public Key Derivation
     let nPubkey = Crypto.util.bytesToHex(getPublicKey(pkBytes)).substr(2);
-    const pubY = Secp256k1.uint256(nPubkey.substr(64), 16);
+    const pubY = uint256(nPubkey.substr(64), 16);
     nPubkey = nPubkey.substr(0, 64);
     const publicKeyBytesCompressed = Crypto.util.hexToBytes(nPubkey);
     if (pubY.isEven()) {
@@ -335,36 +335,36 @@ export async function generateWallet(noUI = false) {
     }
     if (!noUI) {
       // Display Text
-      domGenKeyWarning.style.display = 'block';
-      domPrivateTxt.value = privateKeyForTransactions;
-      domGuiAddress.innerHTML = publicKeyForNetwork;
+      domGenKeyWarningRef.current.style.display = 'block';
+      domPrivateTxtRef.current.value = privateKeyForTransactions;
+      domGuiAddressRef.current.innerHTML = publicKeyForNetwork;
       // New address... so there definitely won't be a balance
-      domGuiBalance.innerHTML = "0";
-      domGuiBalanceBox.style.fontSize = "x-large";
+      domGuiBalanceRef.current.innerHTML = "0";
+      domGuiBalanceBoxRef.current.style.fontSize = "x-large";
       // QR Codes
       const typeNumber = 4;
       const errorCorrectionLevel = 'L';
       const qrPriv = qrcode(typeNumber, errorCorrectionLevel);
       qrPriv.addData(privateKeyForTransactions);
       qrPriv.make();
-      domPrivateQr.innerHTML = qrPriv.createImgTag();
-      domPrivateQr.firstChild.style.borderRadius = '8px';
+      domPrivateQrRef.current.innerHTML = qrPriv.createImgTag();
+      domPrivateQrRef.current.firstChild.style.borderRadius = '8px';
       const qrPub = qrcode(typeNumber, errorCorrectionLevel);
       qrPub.addData('pivx:' + publicKeyForNetwork);
       qrPub.make();
-      domPublicQr.innerHTML = qrPub.createImgTag();
-      domPublicQr.style.display = 'block';
-      domPublicQr.firstChild.style.borderRadius = '8px';
-      domModalQrLabel.innerHTML = 'pivx:' + publicKeyForNetwork;
-      domModalQR.innerHTML = qrPub.createImgTag();
-      domModalQR.firstChild.style.width = "100%";
-      domModalQR.firstChild.style.height = "auto";
-      domModalQR.firstChild.style.imageRendering = "crisp-edges";
+      domPublicQrRef.current.innerHTML = qrPub.createImgTag();
+      domPublicQrRef.current.style.display = 'block';
+      domPublicQrRef.current.firstChild.style.borderRadius = '8px';
+      domModalQrLabelRef.current.innerHTML = 'pivx:' + publicKeyForNetwork;
+      domModalQRRef.current.innerHTML = qrPub.createImgTag();
+      domModalQRRef.current.firstChild.style.width = "100%";
+      domModalQRRef.current.firstChild.style.height = "auto";
+      domModalQRRef.current.firstChild.style.imageRendering = "crisp-edges";
       document.getElementById('clipboard').value = publicKeyForNetwork;
       // Update identicon
-      domIdenticon.dataset.jdenticonValue = publicKeyForNetwork;
-      jdenticon();
-      domGuiWallet.style.display = 'block';
+      domIdenticonRef.current.dataset.jdenticonValue = publicKeyForNetwork;
+      // jdenticon();
+      domGuiWalletRef.current.style.display = 'block';
       viewPrivKey = false;
       hideAllWalletOptions();
     }
@@ -383,24 +383,24 @@ export async function generateWallet(noUI = false) {
 //   console.log("Time taken to generate " + i + " addresses: " + (nEndTime - nStartTime).toFixed(2) + 'ms');
 // }
 
-export async function encryptWallet() {
+export async function encryptWallet(i18n) {
   // Encrypt the wallet WIF with AES-GCM and a user-chosen password - suitable for browser storage
-  let encWIF = await encrypt(privateKeyForTransactions);
+  let encWIF = await encrypt(i18n, privateKeyForTransactions);
   if (typeof encWIF !== "string") return false;
   // Set the encrypted wallet in localStorage
   localStorage.setItem("encwif", encWIF);
   // Hide the encryption warning
-  domGenKeyWarning.style.display = 'none';
+  domGenKeyWarningRef.current.style.display = 'none';
 }
 
-export async function decryptWallet() {
+export async function decryptWallet(i18n) {
   // Check if there's any encrypted WIF available, if so, prompt to decrypt it
   let encWif = localStorage.getItem("encwif");
   if (!encWif || encWif.length < 1) {
     console.log("No local encrypted wallet found!");
     return false;
   }
-  let decWif = await decrypt(encWif);
+  let decWif = await decrypt(i18n, encWif);
   if (!decWif || decWif === "decryption failed!") {
     if (decWif === "decryption failed!")
       alert("Incorrect password!");

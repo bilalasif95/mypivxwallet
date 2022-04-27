@@ -25,7 +25,7 @@ export function EllipticCurve() {
 	};
 
 	ec.FieldElementFp.prototype.equals = function (other) {
-		if (other == this) return true;
+		if (other === this) return true;
 		return (this.q.equals(other.q) && this.x.equals(other.x));
 	};
 
@@ -153,7 +153,7 @@ export function EllipticCurve() {
 		Vl = Vh.multiply(Vl).subtract(P.multiply(Ql)).mod(p);
 		Ql = Ql.multiply(Qh).mod(p);
 
-		for (var j = 1; j <= s; ++j) {
+		for (let j = 1; j <= s; ++j) {
 			Uh = Uh.multiply(Vl).mod(p);
 			Vl = Vl.multiply(Vl).subtract(Ql.shiftLeft(1)).mod(p);
 			Ql = Ql.multiply(Ql).mod(p);
@@ -200,7 +200,7 @@ export function EllipticCurve() {
 	};
 
 	ec.PointFp.prototype.equals = function (other) {
-		if (other == this) return true;
+		if (other === this) return true;
 		if (this.isInfinity()) return other.isInfinity();
 		if (other.isInfinity()) return this.isInfinity();
 		var u, v;
@@ -241,8 +241,8 @@ export function EllipticCurve() {
 		var THREE = new BigInteger("3");
 		var x1 = this.x.toBigInteger();
 		var y1 = this.y.toBigInteger();
-		var x2 = b.x.toBigInteger();
-		var y2 = b.y.toBigInteger();
+		// var x2 = b.x.toBigInteger();
+		// var y2 = b.y.toBigInteger();
 
 		var v2 = v.square();
 		var v3 = v2.multiply(v);
@@ -261,7 +261,7 @@ export function EllipticCurve() {
 
 	ec.PointFp.prototype.twice = function () {
 		if (this.isInfinity()) return this;
-		if (this.y.toBigInteger().signum() == 0) return this.curve.getInfinity();
+		if (this.y.toBigInteger().signum() === 0) return this.curve.getInfinity();
 
 		// TODO: optimized handling of constants
 		var THREE = new BigInteger("3");
@@ -293,7 +293,7 @@ export function EllipticCurve() {
 	// TODO: modularize the multiplication algorithm
 	ec.PointFp.prototype.multiply = function (k) {
 		if (this.isInfinity()) return this;
-		if (k.signum() == 0) return this.curve.getInfinity();
+		if (k.signum() === 0) return this.curve.getInfinity();
 
 		var e = k;
 		var h = e.multiply(new BigInteger("3"));
@@ -308,7 +308,7 @@ export function EllipticCurve() {
 			var hBit = h.testBit(i);
 			var eBit = e.testBit(i);
 
-			if (hBit != eBit) {
+			if (hBit !== eBit) {
 				R = R.add(hBit ? this : neg);
 			}
 		}
@@ -372,7 +372,7 @@ export function EllipticCurve() {
 	};
 
 	ec.PointFp.decodeFrom = function (curve, enc) {
-		var type = enc[0];
+		// var type = enc[0];
 		var dataLen = enc.length - 1;
 
 		// Extract x and y as byte arrays
@@ -416,7 +416,7 @@ export function EllipticCurve() {
 
 	ec.PointFp.prototype.twice2D = function () {
 		if (this.isInfinity()) return this;
-		if (this.y.toBigInteger().signum() == 0) {
+		if (this.y.toBigInteger().signum() === 0) {
 			// if y1 == 0, then (x1, y1) == (x1, -y1)
 			// and hence this = -this and thus 2(x1, y1) == infinity
 			return this.curve.getInfinity();
@@ -434,7 +434,7 @@ export function EllipticCurve() {
 
 	ec.PointFp.prototype.multiply2D = function (k) {
 		if (this.isInfinity()) return this;
-		if (k.signum() == 0) return this.curve.getInfinity();
+		if (k.signum() === 0) return this.curve.getInfinity();
 
 		var e = k;
 		var h = e.multiply(new BigInteger("3"));
@@ -449,7 +449,7 @@ export function EllipticCurve() {
 			var hBit = h.testBit(i);
 			var eBit = e.testBit(i);
 
-			if (hBit != eBit) {
+			if (hBit !== eBit) {
 				R = R.add2D(hBit ? this : neg);
 			}
 		}
@@ -535,7 +535,7 @@ export function EllipticCurve() {
 	};
 
 	ec.CurveFp.prototype.equals = function (other) {
-		if (other == this) return true;
+		if (other === this) return true;
 		return (this.q.equals(other.q) && this.a.equals(other.a) && this.b.equals(other.b));
 	};
 
@@ -568,11 +568,11 @@ export function EllipticCurve() {
 			case 6: // hybrid
 			case 7: // hybrid
 				var len = (s.length - 2) / 2;
-				var xHex = s.substr(2, len);
+				var xHexx = s.substr(2, len);
 				var yHex = s.substr(len + 2, len);
 
 				return new ec.PointFp(this,
-					this.fromBigInteger(new BigInteger(xHex, 16)),
+					this.fromBigInteger(new BigInteger(xHexx, 16)),
 					this.fromBigInteger(new BigInteger(yHex, 16)));
 
 			default: // unsupported
@@ -585,7 +585,7 @@ export function EllipticCurve() {
 		var xHex = p.getX().toBigInteger().toString(16);
 		var yHex = p.getY().toBigInteger().toString(16);
 		var oLen = this.getQ().toString(16).length;
-		if ((oLen % 2) != 0) oLen++;
+		if ((oLen % 2) !== 0) oLen++;
 		while (xHex.length < oLen) {
 			xHex = "0" + xHex;
 		}
@@ -610,7 +610,7 @@ export function EllipticCurve() {
 		if (beta == null) throw new Error("Invalid point compression");
 		var betaValue = beta.toBigInteger();
 		var bit0 = betaValue.testBit(0) ? 1 : 0;
-		if (bit0 != yTilde) {
+		if (bit0 !== yTilde) {
 			// Use the other root
 			beta = this.fromBigInteger(this.getQ().subtract(betaValue));
 		}
@@ -665,7 +665,7 @@ export function EllipticCurve() {
 
 	// secp256k1 called by Bitcoin's ECKEY
 	ec.getSECCurveByName = function (name) {
-		if (ec.secNamedCurves[name] == undefined) return null;
+		if (ec.secNamedCurves[name] === undefined) return null;
 		return ec.secNamedCurves[name]();
 	}
 };

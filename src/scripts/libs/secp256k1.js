@@ -1,6 +1,10 @@
 import BN from "./bn";
 import crypto from "./crypto-min";
 
+function uint256(x, base) {
+    return new BN(x, base)
+}
+
 function Secp256k1() {
     if (typeof module !== 'undefined') {
         // BN = BN
@@ -249,4 +253,4 @@ function Secp256k1() {
     exports.isValidPoint = isValidPoint
     exports.ecverify = ecverify
 };
-export { Secp256k1 };
+export { Secp256k1, uint256 };

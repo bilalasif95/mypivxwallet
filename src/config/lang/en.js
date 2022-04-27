@@ -130,4 +130,8 @@ export const en = {
 		"custom (In Development)": "custom (In Development)",
 		"© MIT 2022 - Built with 💜 by PIVX Labs -": "© MIT 2022 - Built with 💜 by PIVX Labs -",
 		"Donate!": "Donate!",
+		"Do you really want to import a new address? If you haven't saved the last private key, the key will get LOST forever alongside ANY funds with it.": "Do you really want to import a new address? If you haven't saved the last private key, the key will get LOST forever alongside ANY funds with it.",
+		"Do you really want to generate a new address? If you haven't saved the last private key the key will get lost forever and any funds with it.": "Do you really want to generate a new address? If you haven't saved the last private key the key will get lost forever and any funds with it.",
+		"Please enter your wallet encryption password": "Please enter your wallet encryption password",
+		"Please enter your wallet unlock password": "Please enter your wallet unlock password",
 }

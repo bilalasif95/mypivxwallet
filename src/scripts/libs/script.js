@@ -145,23 +145,23 @@ const OP = {
 }
 Object.freeze(OP);
 
-function getScriptForBurn(data) {
-  let cScript = [];
-  // Check if we're fitting any data into the TX
-  if (typeof data === "string" && data.length > 0) {
-    let bData = new TextEncoder().encode(data);
-    cScript.push(OP['RETURN']);
-    cScript.push(OP['PUSHDATA1']);
-    // Append the byte array length
-    cScript.push(bData.length);
-    // Convert from uint8 to array and append the byte array
-    cScript = cScript.concat(Array.prototype.slice.call(bData));
-  } else {
-    // Empty data, create a simple RETURN script
-    cScript.push(OP['RETURN']);
-  }
-  // Return the burn script
-  return cScript;
-}
+// function getScriptForBurn(data) {
+//   let cScript = [];
+//   // Check if we're fitting any data into the TX
+//   if (typeof data === "string" && data.length > 0) {
+//     let bData = new TextEncoder().encode(data);
+//     cScript.push(OP['RETURN']);
+//     cScript.push(OP['PUSHDATA1']);
+//     // Append the byte array length
+//     cScript.push(bData.length);
+//     // Convert from uint8 to array and append the byte array
+//     cScript = cScript.concat(Array.prototype.slice.call(bData));
+//   } else {
+//     // Empty data, create a simple RETURN script
+//     cScript.push(OP['RETURN']);
+//   }
+//   // Return the burn script
+//   return cScript;
+// }
 
 export { OP };

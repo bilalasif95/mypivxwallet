@@ -1,11 +1,25 @@
-import { BigInteger } from "./jsbn";
+/* global BigInt */
 import crypto from "./crypto-min";
 
 function hexToNumber(hex) {
 	if (typeof hex !== 'string') {
 		throw new TypeError('hexToNumber: expected string, got ' + typeof hex);
 	}
-	return BigInteger(`0x${hex}`);
+	return BigInt(`0x${hex}`);
+}
+
+function hexToBytes(hex) {
+	if (typeof hex !== 'string') {
+		throw new TypeError('hexToBytes: expected string, got ' + typeof hex);
+	}
+	if (hex.length % 2)
+		throw new Error('hexToBytes: received invalid unpadded hex');
+	const array = new Uint8Array(hex.length / 2);
+	for (let i = 0; i < array.length; i++) {
+		const j = i * 2;
+		array[i] = Number.parseInt(hex.slice(j, j + 2), 16);
+	}
+	return array;
 }
 
 function bytesToHex(uint8a) {
@@ -14,6 +28,10 @@ function bytesToHex(uint8a) {
 		hex += uint8a[i].toString(16).padStart(2, '0');
 	}
 	return hex;
+}
+
+function pad64(num) {
+	return num.toString(16).padStart(64, '0');
 }
 
 function bytesToNumber(bytes) {
@@ -41,7 +59,7 @@ function normalizePrivateKey(key) {
 		num = key;
 	}
 	else if (typeof key === 'number' && Number.isSafeInteger(key) && key > 0) {
-		num = BigInteger(key);
+		num = BigInt(key);
 	}
 	else if (typeof key === 'string') {
 		if (key.length !== 64)
@@ -72,6 +90,27 @@ function isValidScalar(num) {
 function mod(a, b = CURVE.P) {
 	const result = a % b;
 	return result >= 0 ? result : b + result;
+}
+
+function invertBatch(nums, n = CURVE.P) {
+	const len = nums.length;
+	const scratch = new Array(len);
+	let acc = 1n;
+	for (let i = 0; i < len; i++) {
+		if (nums[i] === 0n)
+			continue;
+		scratch[i] = acc;
+		acc = mod(acc * nums[i], n);
+	}
+	acc = invert(acc, n);
+	for (let i = len - 1; i >= 0; i--) {
+		if (nums[i] === 0n)
+			continue;
+		const tmp = mod(acc * nums[i], n);
+		nums[i] = mod(acc * scratch[i], n);
+		acc = tmp;
+	}
+	return nums;
 }
 
 const USE_ENDOMORPHISM = CURVE.a === 0n;
@@ -136,10 +175,116 @@ class JacobianPoint {
 		}
 		return new JacobianPoint(p.x, p.y, 1n);
 	}
+	static toAffineBatch(points) {
+		const toInv = invertBatch(points.map((p) => p.z));
+		return points.map((p, i) => p.toAffine(toInv[i]));
+	}
+	static normalizeZ(points) {
+		return JacobianPoint.toAffineBatch(points).map(JacobianPoint.fromAffine);
+	}
+	negate() {
+		return new JacobianPoint(this.x, mod(-this.y), this.z);
+	}
+	double() {
+		const A = mod(this.x ** 2n);
+		const B = mod(this.y ** 2n);
+		const C = mod(B ** 2n);
+		const D = mod(2n * (mod(mod((this.x + B) ** 2n)) - A - C));
+		const E = mod(3n * A);
+		const F = mod(E ** 2n);
+		const X3 = mod(F - 2n * D);
+		return new JacobianPoint(X3, mod(E * (D - X3) - 8n * C), mod(2n * this.y * this.z));
+	}
+	add(other) {
+		if (!(other instanceof JacobianPoint)) {
+			throw new TypeError('JacobianPoint#add: expected JacobianPoint');
+		}
+		if (other.x === 0n || other.y === 0n)
+			return this;
+		if (this.x === 0n || this.y === 0n)
+			return other;
+		const Z1Z1 = mod(this.z ** 2n);
+		const Z2Z2 = mod(other.z ** 2n);
+		const U1 = mod(this.x * Z2Z2);
+		const U2 = mod(other.x * Z1Z1);
+		const S1 = mod(this.y * other.z * Z2Z2);
+		const S2 = mod(mod(other.y * this.z) * Z1Z1);
+		const H = mod(U2 - U1);
+		const r = mod(S2 - S1);
+		if (H === 0n) {
+			if (r === 0n) {
+				return this.double();
+			}
+			else {
+				return JacobianPoint.ZERO;
+			}
+		}
+		const HH = mod(H ** 2n);
+		const HHH = mod(H * HH);
+		const V = mod(U1 * HH);
+		const X3 = mod(r ** 2n - HHH - 2n * V);
+		return new JacobianPoint(X3, mod(r * (V - X3) - S1 * HHH), mod(this.z * other.z * H));
+	}
+	precomputeWindow(W) {
+		const windows = USE_ENDOMORPHISM ? 128 / W + 1 : 256 / W + 1;
+		let points = [];
+		let p = this;
+		let base = p;
+		for (let window = 0; window < windows; window++) {
+			base = p;
+			points.push(base);
+			for (let i = 1; i < 2 ** (W - 1); i++) {
+				base = base.add(p);
+				points.push(base);
+			}
+			p = base.double();
+		}
+		return points;
+	}
+	wNAF(n, affinePoint) {
+		if (!affinePoint && this.equals(JacobianPoint.BASE))
+			affinePoint = Point.BASE;
+		const W = (affinePoint && affinePoint._WINDOW_SIZE) || 1;
+		if (256 % W) {
+			throw new Error('Point#wNAF: Invalid precomputation window, must be power of 2');
+		}
+		let precomputes = affinePoint && pointPrecomputes.get(affinePoint);
+		if (!precomputes) {
+			precomputes = this.precomputeWindow(W);
+			if (affinePoint && W !== 1) {
+				precomputes = JacobianPoint.normalizeZ(precomputes);
+				pointPrecomputes.set(affinePoint, precomputes);
+			}
+		}
+		let p = JacobianPoint.ZERO;
+		let f = JacobianPoint.ZERO;
+		const windows = USE_ENDOMORPHISM ? 128 / W + 1 : 256 / W + 1;
+		const windowSize = 2 ** (W - 1);
+		const mask = BigInt(2 ** W - 1);
+		const maxNumber = 2 ** W;
+		const shiftBy = BigInt(W);
+		for (let window = 0; window < windows; window++) {
+			const offset = window * windowSize;
+			let wbits = Number(n & mask);
+			n >>= shiftBy;
+			if (wbits > windowSize) {
+				wbits -= maxNumber;
+				n += 1n;
+			}
+			if (wbits === 0) {
+				f = f.add(window % 2 ? precomputes[offset].negate() : precomputes[offset]);
+			}
+			else {
+				const cached = precomputes[offset + Math.abs(wbits) - 1];
+				p = p.add(wbits < 0 ? cached.negate() : cached);
+			}
+		}
+		return [p, f];
+	}
 	multiply(scalar, affinePoint) {
 		if (!isValidScalar(scalar))
 			throw new TypeError('Point#multiply: expected valid scalar');
-		let n = mod(BigInteger(scalar), CURVE.n);
+		let n = mod(BigInt(scalar), CURVE.n);
 		let point;
 		let fake;
 		if (USE_ENDOMORPHISM) {
@@ -169,10 +314,37 @@ class JacobianPoint {
 
 JacobianPoint.BASE = new JacobianPoint(CURVE.Gx, CURVE.Gy, 1n);
 JacobianPoint.ZERO = new JacobianPoint(0n, 1n, 0n);
+const pointPrecomputes = new WeakMap();
 
 class Point {
+	constructor(x, y) {
+		this.x = x;
+		this.y = y;
+	}
+	_setWindowSize(windowSize) {
+		this._WINDOW_SIZE = windowSize;
+		pointPrecomputes.delete(this);
+	}
 	static fromPrivateKey(privateKey) {
 		return Point.BASE.multiply(normalizePrivateKey(privateKey));
+	}
+	toHex(isCompressed = false) {
+		const x = pad64(this.x);
+		if (isCompressed) {
+			return `${this.y & 1n ? '03' : '02'}${x}`;
+		}
+		else {
+			return `04${x}${pad64(this.y)}`;
+		}
+	}
+	toRawBytes(isCompressed = false) {
+		return hexToBytes(this.toHex(isCompressed));
+	}
+	double() {
+		return JacobianPoint.fromAffine(this).double().toAffine();
+	}
+	add(other) {
+		return JacobianPoint.fromAffine(this).add(JacobianPoint.fromAffine(other)).toAffine();
 	}
 	multiply(scalar) {
 		return JacobianPoint.fromAffine(this).multiply(scalar, this).toAffine();
@@ -190,6 +362,7 @@ export function getPublicKey(privateKey, isCompressed = false) {
 	return point.toRawBytes(isCompressed);
 }
 
+Point.BASE._setWindowSize(8);
 
 function nobleSecp256k1(global, factory) {
 	// eslint-disable-next-line no-unused-expressions
@@ -307,7 +480,7 @@ function nobleSecp256k1(global, factory) {
 			multiplyUnsafe(scalar) {
 				if (!isValidScalar(scalar))
 					throw new TypeError('Point#multiply: expected valid scalar');
-				let n = mod(BigInteger(scalar), CURVE.n);
+				let n = mod(BigInt(scalar), CURVE.n);
 				if (!USE_ENDOMORPHISM) {
 					let p = JacobianPoint.ZERO;
 					let d = this;
@@ -374,9 +547,9 @@ function nobleSecp256k1(global, factory) {
 				let f = JacobianPoint.ZERO;
 				const windows = USE_ENDOMORPHISM ? 128 / W + 1 : 256 / W + 1;
 				const windowSize = 2 ** (W - 1);
-				const mask = BigInteger(2 ** W - 1);
+				const mask = BigInt(2 ** W - 1);
 				const maxNumber = 2 ** W;
-				const shiftBy = BigInteger(W);
+				const shiftBy = BigInt(W);
 				for (let window = 0; window < windows; window++) {
 					const offset = window * windowSize;
 					let wbits = Number(n & mask);
@@ -398,7 +571,7 @@ function nobleSecp256k1(global, factory) {
 			multiply(scalar, affinePoint) {
 				if (!isValidScalar(scalar))
 					throw new TypeError('Point#multiply: expected valid scalar');
-				let n = mod(BigInteger(scalar), CURVE.n);
+				let n = mod(BigInt(scalar), CURVE.n);
 				let point;
 				let fake;
 				if (USE_ENDOMORPHISM) {
@@ -645,7 +818,7 @@ function nobleSecp256k1(global, factory) {
 			if (typeof hex !== 'string') {
 				throw new TypeError('hexToNumber: expected string, got ' + typeof hex);
 			}
-			return BigInteger(`0x${hex}`);
+			return BigInt(`0x${hex}`);
 		}
 		function hexToBytes(hex) {
 			if (typeof hex !== 'string') {
@@ -779,7 +952,7 @@ function nobleSecp256k1(global, factory) {
 			const byteLength = hash.length / 2;
 			const delta = byteLength * 8 - 256;
 			if (delta > 0) {
-				msg = msg >> BigInteger(delta);
+				msg = msg >> BigInt(delta);
 			}
 			if (msg >= CURVE.n) {
 				msg -= CURVE.n;
@@ -853,13 +1026,12 @@ function nobleSecp256k1(global, factory) {
 			return [q, r, s];
 		}
 		function normalizePrivateKey(key) {
-			console.log(key)
 			let num;
 			if (typeof key === 'bigint') {
 				num = key;
 			}
 			else if (typeof key === 'number' && Number.isSafeInteger(key) && key > 0) {
-				num = BigInteger(key);
+				num = BigInt(key);
 			}
 			else if (typeof key === 'string') {
 				if (key.length !== 64)
