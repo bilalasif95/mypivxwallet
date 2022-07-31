@@ -2,7 +2,8 @@
 
 import { networkEnabled, disableNetwork } from "./settings";
 import { createAlert } from "./misc";
-import { domBalanceReload, domBalanceReloadStaking, domGuiBalanceRef, domAvailToDelegate, domGuiBalanceStaking, domGuiBalanceBoxStaking, domAvailToUndelegate, domAddress1s, domTxOutput, domSimpleTXs, domValue1s } from "../App";
+import { domBalanceReloadRef, domGuiAddressRef, errorNoticeRef, domBalanceReloadStakingRef, domGuiBalanceRef, domAvailToDelegateRef, domGuiBalanceStakingRef, domGuiBalanceBoxStakingRef, domAvailToUndelegateRef, domAddress1s, domTxOutput, domSimpleTXs, domValue1s, publicKeyForNetwork } from "../App";
+import axios from "axios";
 
 function networkError(i18n) {
   if (disableNetwork()) {
@@ -11,39 +12,33 @@ function networkError(i18n) {
 }
 
 let cachedBlockCount = 0;
-var publicKeyForNetwork;
 if (networkEnabled) {
   var getBlockCount = function (i18n) {
-    var request = new XMLHttpRequest();
-    request.open('GET', "https://stakecubecoin.net/pivx/blocks", true);
-    request.onerror = networkError(i18n);
-    request.onload = function () {
-      const data = Number(this.response);
+    axios.get("https://stakecubecoin.net/pivx/blocks").then((response) => {
+      const data = Number(response.data);
       // If the block count has changed, refresh all of our data!
-      domBalanceReload.className = domBalanceReload.className.replace(/ playAnim/g, "");
-      domBalanceReloadStaking.className = domBalanceReloadStaking.className.replace(/ playAnim/g, "");
+      domBalanceReloadRef.current.className = domBalanceReloadRef.current.className.replace(/ playAnim/g, "");
+      domBalanceReloadStakingRef.current.className = domBalanceReloadStakingRef.current.className.replace(/ playAnim/g, "");
       if (data > cachedBlockCount) {
         console.log("New block detected! " + cachedBlockCount + " --> " + data);
         if (publicKeyForNetwork)
-          getUnspentTransactions();
+          getUnspentTransactions(i18n);
       }
       cachedBlockCount = data;
-    }
-    request.send();
+    }).catch(() => {
+      networkError(i18n);
+    })
   }
   const COIN = 1e8;
-  var getUnspentTransactions = function () {
-    var request = new XMLHttpRequest()
-    request.open('GET', "https://chainz.cryptoid.info/pivx/api.dws?q=unspent&active=" + publicKeyForNetwork + "&key=fb4fd0981734", true)
-    request.onerror = networkError;
-    request.onload = function () {
-      const data = JSON.parse(this.response);
+  var getUnspentTransactions = function (i18n) {
+    axios.get("https://chainz.cryptoid.info/pivx/api.dws?q=unspent&active=" + domGuiAddressRef.current.innerHTML + "&key=fb4fd0981734").then((response) => {
+      const data = response.data
       let cachedUTXOs = [];
       if (!data.unspent_outputs || data.unspent_outputs.length === 0) {
         console.log('No unspent Transactions');
-        document.getElementById("errorNotice").innerHTML = '<div class="alert alert-danger" role="alert"><h4>Note:</h4><h5>You don\'t have any funds, get some coins first!</h5></div>';
+        errorNoticeRef.current.innerHTML = '<div class="alert alert-danger" role="alert"><h4>Note:</h4><h5>You don\'t have any funds, get some coins first!</h5></div>';
       } else {
-        document.getElementById("errorNotice").innerHTML = '';
+        errorNoticeRef.current.innerHTML = '';
         // Standardize the API UTXOs into a simplified MPW format
         data.unspent_outputs.map(cUTXO => cachedUTXOs.push({
           'id': cUTXO.tx_hash,
@@ -60,32 +55,30 @@ if (networkEnabled) {
             // Set the balance, and adjust font-size for large balance strings
             const nLen = (nBalance / COIN).toString().length;
             domGuiBalanceRef.current.innerText = (nBalance / COIN).toFixed(nLen >= 4 ? 0 : 2);
-            domAvailToDelegate.innerText = "Available: ~" + (nBalance / COIN).toFixed(2) + " PIV";
+            domAvailToDelegateRef.current.innerText = "Available: ~" + (nBalance / COIN).toFixed(2) + " PIV";
           }
 
           return nBalance;
         }
         getBalance(true);
       }
-    }
-    request.send();
+    }).catch(() => {
+      networkError(i18n);
+    })
     // In parallel, fetch Cold Staking UTXOs
-    getDelegatedUTXOs();
+    getDelegatedUTXOs(i18n);
   }
 
   var arrUTXOsToSearch = [];
   let arrDelegatedUTXOs = [];
-  var searchUTXO = function () {
+  var searchUTXO = function (i18n) {
     if (!arrUTXOsToSearch.length) return;
-    var request = new XMLHttpRequest()
-    request.open('GET', "https://stakecubecoin.net/pivx/api/tx-specific/" + arrUTXOsToSearch[0].txid, true);
-    request.onerror = networkError;
-    request.onload = function () {
-      const data = JSON.parse(this.response);
+    axios.get("https://stakecubecoin.net/pivx/api/tx-specific/" + arrUTXOsToSearch[0].txid).then((response) => {
+      const data = response.data
       // Check the UTXOs
       for (const cVout of data.vout) {
         if (cVout.spent) continue;
-        if (cVout.scriptPubKey.type === 'coldstake' && cVout.scriptPubKey.addresses.includes(publicKeyForNetwork)) {
+        if (cVout.scriptPubKey.type === 'coldstake' && cVout.scriptPubKey.addresses.includes(domGuiAddressRef.current.innerHTML)) {
           if (!arrDelegatedUTXOs.find(a => a.id === data.txid && a.vout === cVout.n)) {
             arrDelegatedUTXOs.push({
               'id': data.txid,
@@ -102,38 +95,34 @@ if (networkEnabled) {
 
         if (updateGUI) {
           // Set the balance, and adjust font-size for large balance strings
-          domGuiBalanceStaking.innerText = Math.floor(nBalance / COIN);
-          domGuiBalanceBoxStaking.style.fontSize = Math.floor(nBalance / COIN).toString().length >= 4 ? "large" : "x-large";
-          domAvailToUndelegate.innerText = "Staking: ~" + (nBalance / COIN).toFixed(2) + " PIV";
+          domGuiBalanceStakingRef.current.innerText = Math.floor(nBalance / COIN);
+          domGuiBalanceBoxStakingRef.current.style.fontSize = Math.floor(nBalance / COIN).toString().length >= 4 ? "large" : "x-large";
+          domAvailToUndelegateRef.current.innerText = "Staking: ~" + (nBalance / COIN).toFixed(2) + " PIV";
         }
 
         return nBalance;
       }
       getStakingBalance(true);
-      if (arrUTXOsToSearch.length) searchUTXO();
-    }
-    request.send();
+      if (arrUTXOsToSearch.length) searchUTXO(i18n);
+    }).catch(() => {
+      networkError(i18n);
+    })
   }
 
-  var getDelegatedUTXOs = function () {
+  var getDelegatedUTXOs = function (i18n) {
     if (arrUTXOsToSearch.length) return;
-    var request = new XMLHttpRequest()
-    request.open('GET', "https://stakecubecoin.net/pivx/api/utxo/" + publicKeyForNetwork, true);
-    request.onerror = networkError;
-    request.onload = function () {
-      arrUTXOsToSearch = JSON.parse(this.response);
+    axios.get("https://stakecubecoin.net/pivx/api/utxo/" + domGuiAddressRef.current.innerHTML).then((response) => {
+      arrUTXOsToSearch = response.data;
       arrDelegatedUTXOs = [];
-      searchUTXO();
-    }
-    request.send();
+      searchUTXO(i18n);
+    }).catch(() => {
+      networkError(i18n);
+    })
   }
 
   var sendTransaction = function (i18n, hex, msg = '', boldMessage) {
-    var request = new XMLHttpRequest();
-    request.open('GET', 'https://stakecubecoin.net/pivx/submittx?tx=' + hex, true);
-    request.onerror = networkError;
-    request.onload = function () {
-      const data = this.response;
+    axios.get('https://stakecubecoin.net/pivx/submittx?tx=' + hex).then((response) => {
+      const data = response.data;
       if (data.length === 64) {
         console.log('Transaction sent! ' + data);
         const donationAddress = "DLabsktzGMnsK5K9uRTMCF6NoYNY6ET4Bb";
@@ -144,10 +133,10 @@ if (networkEnabled) {
         domSimpleTXs.style.display = 'none';
         domAddress1s.value = '';
         domValue1s.innerHTML = '';
-        createAlert(i18n, 'success', msg || 'Transaction sent!', boldMessage);
+        createAlert(i18n, 'success', msg || 'Transaction sent!', boldMessage, "", msg ? (1250 + (msg.length * 50)) : 1500);
       } else {
         console.log('Error sending transaction: ' + data);
-        createAlert(i18n, 'warning', 'Transaction Failed!');
+        createAlert(i18n, 'warning', 'Transaction Failed!', "", "", 1250);
         // Attempt to parse and prettify JSON (if any), otherwise, display the raw output.
         let strError = data;
         try {
@@ -156,8 +145,9 @@ if (networkEnabled) {
         } catch (e) { console.log('no parse!'); console.log(e); }
         domTxOutput.innerHTML = '<h4 style="color:red;font-family:mono !important;"><pre style="color: inherit;">' + strError + "</pre></h4>";
       }
-    }
-    request.send();
+    }).catch(() => {
+      networkError(i18n);
+    })
   }
 
   var calculatefee = function (bytes) {

@@ -512,9 +512,9 @@ button:active {
     }
 
         #genKeyWarning div {
-            display: inline-block !important;
+            display: inline-block;
             width: 100%;
-            max-width: calc(100% - 304px) !important;
+            max-width: calc(100% - 304px);
             padding-top: 5px;
 
         }
@@ -536,7 +536,7 @@ button:active {
     .add-frame {
         display: block;
         margin: 0 auto;
-        width: 85% !important;
+        width: 85%;
         height: 460px !important;    ;
         background: rgba(72, 2, 125, 0.60);
         border: 1px solid #a366ff;
@@ -970,7 +970,7 @@ button:active {
         margin: 10px 0 20px 0;
     }
 
-    #comunication {
+    #communication {
         color: white;
         opacity: 0.6;
         padding: 15px 5px 70px 5px;

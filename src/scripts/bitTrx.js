@@ -1,7 +1,8 @@
 import { BigInteger } from "./libs/jsbn";
 import { EllipticCurve } from "./libs/ellipticcurve";
-import { ripemd160 } from "./libs/ripemd160";
+// import { ripemd160 } from "./libs/ripemd160";
 import { OP } from "./libs/script";
+import { bytesToHex } from "./libs/noble-secp256k1";
 
 export function bitjs() {
 	const PUBKEY_ADDRESS = 30;
@@ -13,19 +14,6 @@ export function bitjs() {
 	bitjs.priv = SECRET_KEY.toString(16);
 	bitjs.compressed = true;
 
-	/* provide a privkey and return an WIF  */
-	bitjs.privkey2wif = function (h) {
-		const r = Crypto.util.hexToBytes(h);
-		if (bitjs.compressed === true) {
-			r.push(0x01);
-		}
-		r.unshift(bitjs.priv);
-		const hash = Crypto.SHA256(Crypto.SHA256(r, { asBytes: true }), { asBytes: true });
-		const checksum = hash.slice(0, 4);
-
-		return B58.encode(r.concat(checksum));
-	}
-
 	/* convert a wif key back to a private key */
 	bitjs.wif2privkey = function (wif) {
 		let compressed = false;
@@ -36,7 +24,7 @@ export function bitjs() {
 			key = key.slice(0, key.length - 1);
 			compressed = true;
 		}
-		return { 'privkey': Crypto.util.bytesToHex(key), 'compressed': compressed };
+		return { 'privkey': bytesToHex(key), 'compressed': compressed };
 	}
 
 	/* convert a wif to a pubkey */
@@ -47,12 +35,6 @@ export function bitjs() {
 		const pubkey = bitjs.newPubkey(r['privkey']);
 		bitjs.compressed = compressed;
 		return { 'pubkey': pubkey, 'compressed': r['compressed'] };
-	}
-
-	/* convert a wif to a address */
-	bitjs.wif2address = function (wif) {
-		const r = bitjs.wif2pubkey(wif);
-		return { 'address': bitjs.pubkey2address(r['pubkey']), 'compressed': r['compressed'] };
 	}
 
 	/* generate a public key from a private key */
@@ -75,19 +57,10 @@ export function bitjs() {
 			} else {
 				publicKeyBytesCompressed.unshift(0x03)
 			}
-			return Crypto.util.bytesToHex(publicKeyBytesCompressed);
+			return bytesToHex(publicKeyBytesCompressed);
 		} else {
-			return Crypto.util.bytesToHex(pubkeyBytes);
+			return bytesToHex(pubkeyBytes);
 		}
-	}
-
-	/* provide a public key and return address */
-	bitjs.pubkey2address = function (h, byte) {
-		const r = ripemd160(Crypto.SHA256(Crypto.util.hexToBytes(h), { asBytes: true }));
-		r.unshift(byte || bitjs.pub);
-		const hash = Crypto.SHA256(Crypto.SHA256(r, { asBytes: true }), { asBytes: true });
-		const checksum = hash.slice(0, 4);
-		return B58.encode(r.concat(checksum));
 	}
 
 	bitjs.transaction = function () {
@@ -234,7 +207,7 @@ export function bitjs() {
 				let buffer = Crypto.util.hexToBytes(clone.serialize());
 				buffer = buffer.concat(bitjs.numToBytes(parseInt(shType), 4));
 				const hash = Crypto.SHA256(buffer, { asBytes: true });
-				const r = Crypto.util.bytesToHex(Crypto.SHA256(hash, { asBytes: true }));
+				const r = bytesToHex(Crypto.SHA256(hash, { asBytes: true }));
 				return r;
 			} else {
 				return false;
@@ -292,7 +265,7 @@ export function bitjs() {
 				const sig = serializeSig(r, s);
 				sig.push(parseInt(shType, 10));
 
-				return Crypto.util.bytesToHex(sig);
+				return bytesToHex(sig);
 			} else {
 				return false;
 			}
@@ -417,7 +390,7 @@ export function bitjs() {
 				buffer = buffer.concat(output.script);
 			}
 			buffer = buffer.concat(bitjs.numToBytes(parseInt(this.locktime), 4));
-			return Crypto.util.bytesToHex(buffer);
+			return bytesToHex(buffer);
 		}
 
 		return btrx;

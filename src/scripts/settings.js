@@ -1,5 +1,5 @@
 // 'use strict';
-
+import { networkEnabledVar } from "../App";
 // --- Default Settings
 var debug = false;
 var networkEnabled = true;
@@ -26,6 +26,7 @@ function toggleDebug() {
 }
 
 function toggleNetwork() {
+    networkEnabled = networkEnabledVar;
     networkEnabled = !networkEnabled;
     // domNetwork.innerHTML = '<b> Network:</b> ' + (networkEnabled ? 'Enabled' : 'Disabled');
     return networkEnabled;
@@ -39,7 +40,7 @@ function toggleNetwork() {
 
 // Disable the network, return true if successful.
 function disableNetwork() {
-    if (networkEnabled) return !toggleNetwork();
+    if (networkEnabledVar) return !toggleNetwork();
     return false;
 }
 

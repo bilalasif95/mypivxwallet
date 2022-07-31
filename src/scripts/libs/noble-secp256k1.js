@@ -22,7 +22,7 @@ function hexToBytes(hex) {
 	return array;
 }
 
-function bytesToHex(uint8a) {
+export function bytesToHex(uint8a) {
 	let hex = '';
 	for (let i = 0; i < uint8a.length; i++) {
 		hex += uint8a[i].toString(16).padStart(2, '0');

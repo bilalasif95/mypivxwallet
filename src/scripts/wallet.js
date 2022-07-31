@@ -1,6 +1,6 @@
-import { privateKeyRef, domGuiAddressRef, domGuiWalletRef, domPrivateTxtRef, domPrivateQrRef, domPublicQrRef, domModalQrLabelRef, domModalQRRef, domGuiViewKey, domIdenticonRef, domGenKeyWarningRef, domPrefixRef, domGenerateWalletRef, domImportWalletRef, domGenVanityWalletRef, domAccessWalletRef, domGuiBalanceRef, domGuiBalanceBoxRef } from "../../src/App";
+import { privateKeyRef, domGuiAddressRef, domGuiWalletRef, domPrivateTxtRef, domPrivateQrRef, domPublicQrRef, domModalQrLabelRef, domModalQRRef, guiViewKeyRef, domIdenticonRef, domGenKeyWarningRef, domPrefixRef, domGenerateWalletRef, domImportWalletRef, domGenVanityWalletRef, domAccessWalletRef, domGuiBalanceRef, domGuiBalanceBoxRef } from "../../src/App";
 import { debug, networkEnabled } from "../scripts/settings";
-import { getPublicKey } from "./libs/noble-secp256k1";
+import { getPublicKey, bytesToHex } from "./libs/noble-secp256k1";
 import { uint256 } from "./libs/secp256k1";
 import jsSHA from "./libs/sha256";
 import { ripemd160 } from "./libs/ripemd160";
@@ -9,8 +9,8 @@ import { qrcode } from "./libs/qrcode";
 import { getUnspentTransactions } from "./network";
 import { encrypt, decrypt } from "./libs/aes-gcm";
 
-// B58 Encoding Map
-const MAP = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+// Base58 Encoding Map
+const MAP_B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 // ByteArray to B58
 var to_b58 = function (
@@ -35,7 +35,7 @@ var to_b58 = function (
     }
   }
   while (j--)        //since the base58 digits are backwards, loop through them in reverse order
-    s += MAP[d[j]];  //lookup the character associated with each base58 digit
+    s += MAP_B58[d[j]];  //lookup the character associated with each base58 digit
   return s;          //return the final base58 string
 }
 //B58 to ByteArray
@@ -50,7 +50,7 @@ var from_b58 = function (
     n;        //a temporary placeholder variable for the current byte
   for (i in S) { //loop through each base58 character in the input string
     j = 0;                             //reset the byte iterator
-    c = MAP.indexOf(S[i]);           //set the initial carry amount equal to the current base58 digit
+    c = MAP_B58.indexOf(S[i]);           //set the initial carry amount equal to the current base58 digit
     if (c < 0)                         //see if the base58 digit lookup is invalid (-1)
       return undefined;                //if invalid base58 digit, bail out and return undefined
     // eslint-disable-next-line no-unused-expressions
@@ -67,6 +67,11 @@ var from_b58 = function (
     b.push(d[j]);           //append each byte to the result
   return new Uint8Array(b); //return the final byte array in Uint8Array format
 }
+
+/* MPW constants */
+const pubKeyHashNetworkLen = 21;
+const pubChksum = 4;
+const pubPrebaseLen = pubKeyHashNetworkLen + pubChksum;
 
 var walletAlreadyMade = 0;
 var privateKeyForTransactions;
@@ -113,28 +118,23 @@ export function importWallet(i18n, newWif = false, raw = false) {
     const privkeyBytes = key.slice(0, key.length - 1);
     if (debug) {
       // WIF to Private Key
-      console.log(Crypto.util.bytesToHex(privkeyWIF));
-      console.log(Crypto.util.bytesToHex(byteArryConvert));
-      console.log(Crypto.util.bytesToHex(droplfour));
-      console.log(Crypto.util.bytesToHex(privkeyBytes));
+      console.log(bytesToHex(privkeyWIF));
+      console.log(bytesToHex(byteArryConvert));
+      console.log(bytesToHex(droplfour));
+      console.log(bytesToHex(privkeyBytes));
     }
     // Public Key Derivation
-    let nPubkey = Crypto.util.bytesToHex(getPublicKey(privkeyBytes)).substr(2);
+    let nPubkey = bytesToHex(getPublicKey(privkeyBytes)).substr(2);
     const pubY = uint256(nPubkey.substr(64), 16);
     nPubkey = nPubkey.substr(0, 64);
     const publicKeyBytesCompressed = Crypto.util.hexToBytes(nPubkey);
-    if (pubY.isEven()) {
-      publicKeyBytesCompressed.unshift(0x02);
-    } else {
-      publicKeyBytesCompressed.unshift(0x03);
-    }
+    publicKeyBytesCompressed.unshift(pubY.isEven() ? 0x02 : 0x03);
     // First pubkey SHA-256 hash
     const pubKeyHashing = new jsSHA(0, 0, { "numRounds": 1 });
     pubKeyHashing.update(publicKeyBytesCompressed);
     // RIPEMD160 hash
     const pubKeyHashRipemd160 = ripemd160(pubKeyHashing.getHash(0));
     // Network Encoding
-    const pubKeyHashNetworkLen = pubKeyHashRipemd160.length + 1;
     const pubKeyHashNetwork = new Uint8Array(pubKeyHashNetworkLen);
     pubKeyHashNetwork[0] = PUBKEY_ADDRESS;
     writeToUint8(pubKeyHashNetwork, pubKeyHashRipemd160, 1);
@@ -145,7 +145,7 @@ export function importWallet(i18n, newWif = false, raw = false) {
     // Checksum
     const checksumPubKey = pubKeyHashingSF.slice(0, 4);
     // Public key pre-base58
-    const pubKeyPreBase = new Uint8Array(pubKeyHashNetworkLen + checksumPubKey.length);
+    const pubKeyPreBase = new Uint8Array(pubPrebaseLen);
     writeToUint8(pubKeyPreBase, pubKeyHashNetwork, 0);
     writeToUint8(pubKeyPreBase, checksumPubKey, pubKeyHashNetworkLen);
     // Encode as Base58 human-readable network address
@@ -184,7 +184,7 @@ export function importWallet(i18n, newWif = false, raw = false) {
     // Set view key as public and refresh QR code
     viewPrivKey = true;
     viewPrivKey = !viewPrivKey;
-    domGuiViewKey.innerHTML = viewPrivKey ? 'Privkey QR' : 'Pubkey QR';
+    guiViewKeyRef.current.innerHTML = viewPrivKey ? 'Privkey QR' : 'Pubkey QR';
     domPrivateTxtRef.current.style.display = viewPrivKey ? 'block' : 'none';
     domPrivateQrRef.current.style.display = viewPrivKey ? 'block' : 'none';
     domPublicQrRef.current.style.display = !viewPrivKey ? 'block' : 'none';
@@ -199,7 +199,7 @@ export function importWallet(i18n, newWif = false, raw = false) {
     }
     // Load UTXOs from explorer
     if (networkEnabled)
-      getUnspentTransactions();
+      getUnspentTransactions(i18n);
 
     // Hide all wallet starter options
     hideAllWalletOptions();
@@ -224,19 +224,21 @@ function hideAllWalletOptions() {
 
 // Writes a sequence of Array-like bytes into a location within a Uint8Array
 function writeToUint8(arr, bytes, pos) {
-  const len = arr.length;
-  let i = 0;
-  for (pos; pos < len; pos++) {
-    arr[pos] = bytes[i];
-    if (!Number.isSafeInteger(bytes[i++])) break;
+  const arrLen = arr.length;
+  // Sanity: ensure an overflow cannot occur, if one is detected, somewhere in MPW's state could be corrupted.
+  if ((arrLen - pos) - bytes.length < 0) {
+    const strERR = 'CRITICAL: Overflow detected (' + ((arrLen - pos) - bytes.length) + '), possible state corruption, backup and refresh advised.';
+    alert(strERR);
+    throw Error(strERR);
   }
+  let i = 0;
+  while (pos < arrLen)
+    arr[pos++] = bytes[i++];
 }
 
 // Cryptographic Random-Gen
-function getSafeRand() {
-  const r = new Uint8Array(32);
-  window.crypto.getRandomValues(r);
-  return r;
+function getSafeRand(nSize = 32) {
+  return crypto.getRandomValues(new Uint8Array(nSize));
 }
 
 // Wallet Generation
@@ -268,22 +270,17 @@ export async function generateWallet(i18n, noUI = false) {
     privateKeyForTransactions = to_b58(keyWithChecksum);
 
     // Public Key Derivation
-    let nPubkey = Crypto.util.bytesToHex(getPublicKey(pkBytes)).substr(2);
+    let nPubkey = bytesToHex(getPublicKey(pkBytes)).substr(2);
     const pubY = uint256(nPubkey.substr(64), 16);
     nPubkey = nPubkey.substr(0, 64);
     const publicKeyBytesCompressed = Crypto.util.hexToBytes(nPubkey);
-    if (pubY.isEven()) {
-      publicKeyBytesCompressed.unshift(0x02);
-    } else {
-      publicKeyBytesCompressed.unshift(0x03);
-    }
+    publicKeyBytesCompressed.unshift(pubY.isEven() ? 0x02 : 0x03);
     // First pubkey SHA-256 hash
     const pubKeyHashing = new jsSHA(0, 0, { "numRounds": 1 });
     pubKeyHashing.update(publicKeyBytesCompressed);
     // RIPEMD160 hash
     const pubKeyHashRipemd160 = ripemd160(pubKeyHashing.getHash(0));
     // Network Encoding
-    const pubKeyHashNetworkLen = pubKeyHashRipemd160.length + 1;
     const pubKeyHashNetwork = new Uint8Array(pubKeyHashNetworkLen);
     pubKeyHashNetwork[0] = PUBKEY_ADDRESS;
     writeToUint8(pubKeyHashNetwork, pubKeyHashRipemd160, 1);
@@ -294,7 +291,7 @@ export async function generateWallet(i18n, noUI = false) {
     // Checksum
     const checksumPubKey = pubKeyHashingSF.slice(0, 4);
     // Public key pre-base58
-    const pubKeyPreBase = new Uint8Array(pubKeyHashNetworkLen + checksumPubKey.length);
+    const pubKeyPreBase = new Uint8Array(pubPrebaseLen);
     writeToUint8(pubKeyPreBase, pubKeyHashNetwork, 0);
     writeToUint8(pubKeyPreBase, checksumPubKey, pubKeyHashNetworkLen);
     // Encode as Base58 human-readable network address
@@ -305,7 +302,7 @@ export async function generateWallet(i18n, noUI = false) {
       console.log("Private Key")
       console.log(pkNetBytes)
       console.log("Private key plus Net Prefix and Leading Digits")
-      console.log(Crypto.util.bytesToHex(pkNetBytes))
+      console.log(bytesToHex(pkNetBytes))
       console.log("Double SHA-256 Hash")
       console.log(shaObj.getHash(0))
       console.log('CheckSum')
@@ -317,7 +314,7 @@ export async function generateWallet(i18n, noUI = false) {
       console.log('Public Key')
       console.log(publicKeyBytesCompressed)
       console.log('Public Key Extended')
-      // console.log(Crypto.util.bytesToHex(pubkeyExt))
+      // console.log(bytesToHex(pubkeyExt))
       console.log('SHA256 Public Key')
       console.log(pubKeyHashing.getHash("HEX"))
       console.log('RIPEMD160 Public Key')
@@ -383,9 +380,9 @@ export async function generateWallet(i18n, noUI = false) {
 //   console.log("Time taken to generate " + i + " addresses: " + (nEndTime - nStartTime).toFixed(2) + 'ms');
 // }
 
-export async function encryptWallet(i18n) {
+export async function encryptWallet(i18n, strPassword = '') {
   // Encrypt the wallet WIF with AES-GCM and a user-chosen password - suitable for browser storage
-  let encWIF = await encrypt(i18n, privateKeyForTransactions);
+  let encWIF = await encrypt(i18n, privateKeyForTransactions, strPassword);
   if (typeof encWIF !== "string") return false;
   // Set the encrypted wallet in localStorage
   localStorage.setItem("encwif", encWIF);
@@ -393,14 +390,14 @@ export async function encryptWallet(i18n) {
   domGenKeyWarningRef.current.style.display = 'none';
 }
 
-export async function decryptWallet(i18n) {
+export async function decryptWallet(i18n, strPassword = '') {
   // Check if there's any encrypted WIF available, if so, prompt to decrypt it
   let encWif = localStorage.getItem("encwif");
   if (!encWif || encWif.length < 1) {
     console.log("No local encrypted wallet found!");
     return false;
   }
-  let decWif = await decrypt(i18n, encWif);
+  let decWif = await decrypt(i18n, encWif, strPassword);
   if (!decWif || decWif === "decryption failed!") {
     if (decWif === "decryption failed!")
       alert("Incorrect password!");

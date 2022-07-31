@@ -3,16 +3,19 @@ import { withTranslation } from 'react-i18next'
 import { createRef, useEffect, useState } from 'react';
 // import { debug, networkEnabled, toggleDebug, toggleNetwork } from "./scripts/settings";
 import { hasEncryptedWallet, decryptWallet, importWallet, generateWallet, encryptWallet } from "./scripts/wallet";
-import {
-  calculatefee, sendTransaction
-  // , getBlockCount 
-} from "./scripts/network";
+import { calculatefee, sendTransaction, getBlockCount } from "./scripts/network";
 import { bitjs } from "./scripts/bitTrx";
 import { createAlert } from "./scripts/misc";
 // import { jdenticon } from "./scripts/libs/jdenticon.min";
 
 const privateKeyRef = createRef();
 const domGenKeyWarningRef = createRef();
+const domEncryptWarningTxtRef = createRef();
+const domEncryptBtnTxtRef = createRef();
+const domEncryptPasswordBoxRef = createRef();
+const domEncryptPasswordFirstRef = createRef();
+const domEncryptPasswordSecondRef = createRef();
+const guiViewKeyRef = createRef();
 const domPrivateTxtRef = createRef();
 const domGuiAddressRef = createRef();
 const domGuiBalanceRef = createRef();
@@ -26,12 +29,23 @@ const domGuiWalletRef = createRef();
 const domPrefixRef = createRef();
 const domGenerateWalletRef = createRef();
 const domImportWalletRef = createRef();
+const domImportWalletTextRef = createRef();
+const domAccessWalletBtnRef = createRef();
+const wToggleRef = createRef();
+const domBalanceReloadRef = createRef();
+const domBalanceReloadStakingRef = createRef();
 const domGenVanityWalletRef = createRef();
 const domAccessWalletRef = createRef();
+const errorNoticeRef = createRef();
+const domGuiBalanceStakingRef = createRef();
+const domAvailToDelegateRef = createRef();
+const domAvailToUndelegateRef = createRef();
+const domGuiBalanceBoxStakingRef = createRef();
+var networkEnabledVar = true;
+var publicKeyForNetwork;
 
 function App(props) {
   var privateKeyForTransactions;
-  var publicKeyForNetwork;
   var addresschange;
   var totalSent;
   var valuechange;
@@ -43,10 +57,11 @@ function App(props) {
   }
   function toggleNetwork() {
     setNetworkEnabled(!networkEnabled);
+    networkEnabledVar = !networkEnabledVar
   }
 
-  // B58 Encoding Map
-  const MAP = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  // Base58 Encoding Map
+  const MAP_B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
   function onLanguageChange(lang) {
     i18n.changeLanguage(lang)
   }
@@ -66,8 +81,11 @@ function App(props) {
   const PUBKEY_PREFIX = "D";
   // const PUBKEY_ADDRESS = 30;
   // const SECRET_KEY = 212;
-
   const COIN = 1e8;
+
+  /* Internal tweaking parameters */
+  // A new encryption password must be 'at least' this long.
+  const MIN_PASS_LENGTH = 6;
 
   // Cool stuff
   const donationAddress = "DLabsktzGMnsK5K9uRTMCF6NoYNY6ET4Bb";
@@ -90,18 +108,18 @@ function App(props) {
   // const domDebug = document.getElementById('Debug');
   // const domBalanceReload = document.getElementById("balanceReload");
   // const domBalanceReloadStaking = document.getElementById("balanceReloadStaking");
-  const domGuiBalanceStaking = document.getElementById("guiBalanceStaking");
-  const domGuiBalanceBoxStaking = document.getElementById("guiBalanceBoxStaking");
+  // const domGuiBalanceStaking = document.getElementById("guiBalanceStaking");
+  // const domGuiBalanceBoxStaking = document.getElementById("guiBalanceBoxStaking");
   const domTxTab = document.getElementById("txTab");
   const domSimpleTXs = document.getElementById("simpleTransactions");
   const domSimpleTXsDropdown = document.getElementById("simpleTransactionsDropdown");
   const domAddress1s = document.getElementById("address1s");
   const domValue1s = document.getElementById("value1s");
-  const domGuiViewKey = document.getElementById('guiViewKey');
+  // const domGuiViewKey = document.getElementById('guiViewKey');
   // const domModalQR = document.getElementById('ModalQR');
   // const domModalQrLabel = document.getElementById('ModalQRLabel');
   const [prefix, setPrefix] = useState(PUBKEY_PREFIX);
-  const domWalletToggle = document.getElementById("wToggle");
+  // const domWalletToggle = document.getElementById("wToggle");
   const domVanityUiButtonTxt = document.getElementById("vanButtonText");
   const domGenIt = document.getElementById("genIt");
   const domHumanReadable = document.getElementById("HumanReadable");
@@ -110,8 +128,8 @@ function App(props) {
   const domReqDisplay = document.getElementById('reqDescDisplay');
   // const domIdenticon = document.getElementById("identicon");
 
-  const domAvailToDelegate = document.getElementById('availToDelegate');
-  const domAvailToUndelegate = document.getElementById('availToUndelegate');
+  // const domAvailToDelegate = document.getElementById('availToDelegate');
+  // const domAvailToUndelegate = document.getElementById('availToUndelegate');
 
   function getBalance(updateGUI = false) {
     const nBalance = cachedUTXOs.reduce((a, b) => a + b.sats, 0);
@@ -121,7 +139,7 @@ function App(props) {
       // Set the balance, and adjust font-size for large balance strings
       const nLen = (nBalance / COIN).toString().length;
       domGuiBalanceRef.current.innerText = (nBalance / COIN).toFixed(nLen >= 4 ? 0 : 2);
-      domAvailToDelegate.innerText = "Available: ~" + (nBalance / COIN).toFixed(2) + " PIV";
+      domAvailToDelegateRef.current.innerText = "Available: ~" + (nBalance / COIN).toFixed(2) + " PIV";
     }
 
     return nBalance;
@@ -132,9 +150,9 @@ function App(props) {
 
     if (updateGUI) {
       // Set the balance, and adjust font-size for large balance strings
-      domGuiBalanceStaking.innerText = Math.floor(nBalance / COIN);
-      domGuiBalanceBoxStaking.style.fontSize = Math.floor(nBalance / COIN).toString().length >= 4 ? "large" : "x-large";
-      domAvailToUndelegate.innerText = "Staking: ~" + (nBalance / COIN).toFixed(2) + " PIV";
+      domGuiBalanceStakingRef.current.innerText = Math.floor(nBalance / COIN);
+      domGuiBalanceBoxStakingRef.current.style.fontSize = Math.floor(nBalance / COIN).toString().length >= 4 ? "large" : "x-large";
+      domAvailToUndelegateRef.current.innerText = "Staking: ~" + (nBalance / COIN).toFixed(2) + " PIV";
     }
 
     return nBalance;
@@ -155,31 +173,24 @@ function App(props) {
 
   let audio = null;
   function playMusic() {
-    if (audio === null) {
+    if (audio === null)
       audio = new Audio('assets/music.mp3');
-      audio.play();
+    if (audio.paused || audio.ended) {
       startDisco();
-    } else
-      if (audio.paused) {
-        audio.play();
-        startDisco();
-      } else
-        if (audio.ended) {
-          audio.play();
-          startDisco();
-        } else {
-          audio.pause();
-          stopDisco();
-        }
+    } else {
+      stopDisco();
+    }
   }
 
   function startDisco() {
+    audio.play();
     for (const domImg of document.getElementsByTagName('img')) {
       domImg.classList.add("discoFilter");
     }
   }
 
   function stopDisco() {
+    audio.pause();
     for (const domImg of document.getElementsByTagName('img')) {
       domImg.classList.remove("discoFilter");
     }
@@ -219,7 +230,7 @@ function App(props) {
   let viewPrivKey = false;
   function toggleKeyView() {
     viewPrivKey = !viewPrivKey;
-    domGuiViewKey.innerHTML = viewPrivKey ? 'Privkey QR' : 'Pubkey QR';
+    guiViewKeyRef.current.innerHTML = viewPrivKey ? 'Privkey QR' : 'Pubkey QR';
     domPrivateTxtRef.current.style.display = viewPrivKey ? 'block' : 'none';
     domPrivateQrRef.current.style.display = viewPrivKey ? 'block' : 'none';
     domPublicQrRef.current.style.display = !viewPrivKey ? 'block' : 'none';
@@ -240,36 +251,53 @@ function App(props) {
   }
 
   function toggleWallet() {
-    var toggle = domWalletToggle.innerHTML;
+    var toggle = wToggleRef.current.innerHTML;
     // Hide and Reset the Vanity address input
     setPrefix(PUBKEY_PREFIX);
     domPrefixRef.current.style.display = 'none';
-    if (toggle === "Access My Wallet") {
-      if (!hasEncryptedWallet()) {
-        // No local wallet found
-        domGenerateWalletRef.current.style.display = 'none';
-        domImportWalletRef.current.style.display = 'block';
-        domWalletToggle.innerHTML = "Create A New Wallet";
-        return;
-      }
+    if (toggle === i18n.t("Access My Wallet")) {
+      domImportWalletRef.current.style.display = 'block';
+      domAccessWalletBtnRef.current.style.display = 'none';
       // We have a local wallet! Display the decryption prompt
-      decryptWallet(i18n).then(hasWallet => {
+      if (hasEncryptedWallet()) {
+        privateKeyRef.current.placeholder = i18n.t('Enter your wallet password');
+        domImportWalletTextRef.current.innerText = i18n.t('Unlock Wallet');
+      }
+    } else {
+      domGenerateWalletRef.current.style.display = 'block';
+    }
+  }
+
+  function guiImportWallet() {
+    if (hasEncryptedWallet()) {
+      decryptWallet(i18n, privateKeyRef.current.value).then(hasWallet => {
         if (hasWallet) {
           hideAllWalletOptions();
         } else {
           domGenerateWalletRef.current.style.display = 'block';
-          domImportWalletRef.current.style.display = 'none';
-          domWalletToggle.innerHTML = "Access My Wallet";
         }
       }).catch(e => {
-        domGenerateWalletRef.current.style.display = 'none';
         domImportWalletRef.current.style.display = 'block';
-        domWalletToggle.innerHTML = "Create A New Wallet";
       });
     } else {
-      domGenerateWalletRef.current.style.display = 'block';
-      domImportWalletRef.current.style.display = 'none';
-      domWalletToggle.innerHTML = "Access My Wallet";
+      importWallet(i18n);
+    }
+  }
+
+  function guiEncryptWallet() {
+    // Show our inputs if we haven't already
+    if (domEncryptPasswordBoxRef.current.style.display === 'none') {
+      // Return the display to it's class form
+      domEncryptPasswordBoxRef.current.style.display = '';
+      domEncryptBtnTxtRef.current.innerText = i18n.t('Finish Encryption');
+    } else {
+      // Fetch our inputs, ensure they're of decent entropy + match eachother
+      const strPass = domEncryptPasswordFirstRef.current.value,
+        strPassRetype = domEncryptPasswordSecondRef.current.value;
+      if (strPass.length < MIN_PASS_LENGTH) return createAlert(i18n, 'warning', 'That password is a little short!', "", "", 4000, "Use at least", MIN_PASS_LENGTH, "characters.");
+      if (strPass !== strPassRetype) return createAlert(i18n, 'warning', "Your passwords don't match!", "", "", 2250);
+      encryptWallet(i18n, strPass);
+      createAlert(i18n, 'success', "Nice stuff, Armoured PIVian!", "You're Secured! 🔐", "", 5500);
     }
   }
 
@@ -293,7 +321,7 @@ function App(props) {
     }
     while (arrWorkers.length) arrWorkers.pop();
     domPrefixRef.current.disabled = false;
-    domVanityUiButtonTxt.innerText = 'Create A Vanity Wallet';
+    domVanityUiButtonTxt.innerText = i18n.t('Create A Vanity Wallet');
     clearInterval(vanUiUpdater);
   }
 
@@ -311,7 +339,7 @@ function App(props) {
     } else {
       // Ensure the input is base58 compatible
       for (const char of prefix) {
-        if (!MAP.includes(char)) return alert(`${i18n.t('character')} ${char}${i18n.t('unsupported')}`);
+        if (!MAP_B58.includes(char)) return alert(`${i18n.t('character')} ${char}${i18n.t('unsupported')}`);
       }
       // We also don't want users to be mining addresses for years... so cap the letters to four until the generator is more optimized
       if (prefix.length > 6) return alert(i18n.t('long_name'));
@@ -364,15 +392,15 @@ function App(props) {
   function undelegateGUI() {
     // Verify the amount
     const nAmount = Number(document.getElementById('undelegateAmount').value);
-    if (nAmount < 0.01) return alert(i18n.t('Minimum_amount'));
+    if (nAmount < 0.01) return createAlert(i18n, 'warning', 'Minimum_amount', "", "", 2000);
     undelegate(nAmount);
   }
   function undelegate(value) {
     if (!publicKeyForNetwork) {
       if (hasEncryptedWallet())
-        alert(i18n.t("Please unlock your wallet before sending transactions!"));
+        createAlert(i18n, 'warning', "Please unlock your wallet before sending transactions!", "", "", 3000);
       else
-        alert(i18n.t("Please import/create your wallet before sending transactions!"));
+        createAlert(i18n, 'warning', "Please import/create your wallet before sending transactions!", "", "", 3250);
       return;
     }
 
@@ -407,7 +435,7 @@ function App(props) {
         // Sanity
         if (cachedColdStakeAddr.length !== 34 || !cachedColdStakeAddr.startsWith('S')) {
           askForCSAddr(true);
-          return alert(i18n.t('undelegate_alert'));
+          return createAlert(i18n, 'success', 'undelegate_alert', "Staking Address set!");
         }
         cTx.addcoldstakingoutput(publicKeyForNetwork, cachedColdStakeAddr, valuechange);
         console.log('Re-delegated delegation spend change!');
@@ -434,17 +462,17 @@ function App(props) {
     return false;
   }
   function delegateGUI() {
-    // Ensure the user has an address set - if not, request one!
-    if (!askForCSAddr()) return;
-
     // Verify the amount
     const nAmount = Number(document.getElementById('delegateAmount').value);
-    if (nAmount < 1) return alert(i18n.t('minimum_staking'));
+    if (nAmount < 1) return createAlert(i18n, 'warning', 'minimum_staking', "", "", 2000);
+
+    // Ensure the user has an address set - if not, request one!
+    if (!askForCSAddr()) return;
 
     // Sanity
     if (cachedColdStakeAddr.length !== 34 || !cachedColdStakeAddr.startsWith('S')) {
       askForCSAddr(true);
-      return alert(i18n.t('undelegate_alert'));
+      return createAlert(i18n, 'success', 'Now go ahead and stake!', "Staking Address set!");
     }
     delegate(nAmount, cachedColdStakeAddr);
   }
@@ -526,7 +554,7 @@ function App(props) {
   //     domGenIt.innerHTML = "Continue";
   //   } else {
   //     console.warn("Amount: " + value + "\nFee: " + nFee + "\nChange: " + valuechange + "\nTOTAL: " + totalSent);
-  //     createAlert(i18n, 'warning', 'You are trying to send more than you have!');
+  //     createAlert(i18n, 'warning', 'You are trying to send more than you have!', "", "", 2500);
   //   }
   // }
 
@@ -534,9 +562,9 @@ function App(props) {
     if (!networkEnabled) return alert(i18n.t("offline_send"));
     if (!publicKeyForNetwork) {
       if (hasEncryptedWallet())
-        createAlert(i18n, 'warning', "Please unlock your wallet before sending transactions!");
+        createAlert(i18n, 'warning', "Please unlock your wallet before sending transactions!", "", "", 2500);
       else
-        createAlert(i18n, 'warning', "Please import/create your wallet before sending transactions!");
+        createAlert(i18n, 'warning', "Please import/create your wallet before sending transactions!", "", "", 2500);
       return;
     }
     const address = domAddress1s.value;
@@ -590,7 +618,7 @@ function App(props) {
         domGenIt.innerHTML = "Continue";
       } else {
         console.warn("Amount: " + value + "\nFee: " + nFee + (fNoChange ? "" : "\nChange: " + valuechange) + "\nTOTAL: " + totalSent);
-        createAlert(i18n, 'warning', "You're trying to send more than you have!");
+        createAlert(i18n, 'warning', "You're trying to send more than you have!", "", "", 2500);
       }
     } else {
       console.log("No address or value");
@@ -646,12 +674,17 @@ function App(props) {
     // jdenticon();
 
     // Play reload anim
-    // domBalanceReload.className += " playAnim";
-    // domBalanceReloadStaking.className += " playAnim";
+    domBalanceReloadRef.current.className += " playAnim";
+    domBalanceReloadStakingRef.current.className += " playAnim";
     // Fetch block count + UTXOs
-    // getBlockCount(i18n);
+    getBlockCount(i18n);
   }
 
+  useEffect(() => {
+    if (networkEnabled) {
+      getBlockCount(i18n);
+    }
+  }, [networkEnabled])
   window.onload = (() => {
     // Configure Identicon
     // jdenticon.configure({
@@ -895,14 +928,18 @@ function App(props) {
 
                 {/* WARNING  */}
                 <div ref={domGenKeyWarningRef} id='genKeyWarning' style={{ display: 'none' }} className="alert alert-danger col-md-12" role="alert">
-                  <div>
-                    <p><b><span>{i18n.t('WARNING')}</span></b><span>{i18n.t('save you keys')}</span><br />
-                      <span>{i18n.t('encrypt')}</span><br /></p>
+                  <div style={{ maxWidth: '100%' }}>
+                    <p ref={domEncryptWarningTxtRef} id="encryptWarningText" className="center-text"><b>{i18n.t('WARNING')}</b>{i18n.t('save you keys')}<br />
+                      {i18n.t('encrypt')}</p>
                   </div>
-                  <button className="pivx-button-big" onClick={() => encryptWallet(i18n)}>
+                  <div ref={domEncryptPasswordBoxRef} id="encryptPassword" style={{ display: 'none', maxWidth: '100%' }}>
+                    <input ref={domEncryptPasswordFirstRef} className="center-text" style={{ width: '100%', fontFamily: 'monospace' }} type="password" id="newPassword" placeholder={i18n.t("Enter Password")} />
+                    <input ref={domEncryptPasswordSecondRef} className="center-text" style={{ width: '100%', fontFamily: 'monospace' }} type="password" id="newPasswordRetype" placeholder={i18n.t("Re-type Password")} />
+                  </div>
+                  <button className="pivx-button-big" onClick={() => guiEncryptWallet()} style={{ float: 'none', margin: '0 auto', display: 'block' }}>
                     <span className="buttoni-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M85.967 10.65l-32.15-9.481a13.466 13.466 0 00-7.632 0l-32.15 9.48C11.661 11.351 10 13.567 10 16.042v26.623c0 12.321 3.67 24.186 10.609 34.31 6.774 9.885 16.204 17.49 27.264 21.99a5.612 5.612 0 004.251 0c11.061-4.5 20.491-12.104 27.266-21.99C86.329 66.85 90 54.985 90 42.664V16.042a5.656 5.656 0 00-4.033-5.392zM69 68.522C69 70.907 67.03 72 64.584 72H34.092C31.646 72 30 70.907 30 68.522v-23.49C30 42.647 31.646 41 34.092 41H37v-9.828C37 24.524 41.354 18.5 49.406 18.5 57.37 18.5 62 24.066 62 31.172V41h2.584C67.03 41 69 42.647 69 45.032v23.49zM58 41v-9.828c0-4.671-3.708-8.472-8.5-8.472-4.791 0-8.5 3.8-8.5 8.472V41h17z"></path></svg></span>
 
-                    <span className="buttoni-text">{i18n.t('Encrypt Wallet')}</span>
+                    <span ref={domEncryptBtnTxtRef} className="buttoni-text" id="encryptButton">{i18n.t('Set Password')}</span>
 
                     <span className="buttoni-arrow"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M23.328 16.707L13.121 26.914a.5.5 0 01-.707 0l-2.828-2.828a.5.5 0 010-.707L16.964 16 9.586 8.621a.5.5 0 010-.707l2.828-2.828a.5.5 0 01.707 0l10.207 10.207a1 1 0 010 1.414z"></path></svg></span>
                   </button>
@@ -923,7 +960,7 @@ function App(props) {
                           </div>
                         </div>
                         <div id="bal-title">
-                          <h3 className="noselect balance-title">{i18n.t('balance')} &nbsp;&nbsp;<span id="balanceReload" className="reload noselect" onClick={() => refreshChainData()}>&#x21bb;</span></h3>
+                          <h3 className="noselect balance-title">{i18n.t('balance')} &nbsp;&nbsp;<span ref={domBalanceReloadRef} id="balanceReload" className="reload noselect" onClick={() => refreshChainData()}>&#x21bb;</span></h3>
                         </div>
                       </div>
                     </div>
@@ -952,7 +989,7 @@ function App(props) {
                             <textarea ref={domPrivateTxtRef} id="PrivateTxt" style={{ display: 'none' }} disabled="" className="form-control private-key-area"></textarea>
                             <button className="pivx-button-big" onClick={() => toggleKeyView()}>
                               <span className="buttoni-icon"><i className="far fa-eye fa-tiny-margin"></i></span>
-                              <span className="buttoni-text" id="guiViewKey">{i18n.t('QR')}</span>
+                              <span className="buttoni-text" ref={guiViewKeyRef} id="guiViewKey">{i18n.t('QR')}</span>
                               <span className="buttoni-arrow"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M23.328 16.707L13.121 26.914a.5.5 0 01-.707 0l-2.828-2.828a.5.5 0 010-.707L16.964 16 9.586 8.621a.5.5 0 010-.707l2.828-2.828a.5.5 0 01.707 0l10.207 10.207a1 1 0 010 1.414z"></path></svg></span>
                             </button>
                           </div>
@@ -980,7 +1017,7 @@ function App(props) {
                     </div>
 
 
-                    <input ref={domPrefixRef} style={{ display: 'none' }} value={prefix} type="text" id='prefix' placeholder="Address Prefix" onKeyUp={() => checkVanity()} onChange={() => checkVanity()} />
+                    <input ref={domPrefixRef} style={{ display: 'none' }} value={prefix} type="text" id='prefix' placeholder={i18n.t("Address Prefix")} onKeyUp={() => checkVanity()} onChange={() => checkVanity()} />
 
                     <button className="pivx-button-big" onClick={() => generateVanityWallet()}>
                       <span className="buttoni-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 70"><path d="M3.497 25.717C1.401 25.588 0 23.847 0 21.753v-2.535c0-.775.149-1.593.925-1.593h22.719c2.173 0 3.941 1.861 3.941 4.034 0 2.174-1.769 3.988-3.941 3.988l-20.207.048c-.02 0 .08.023.06.022z"></path><path d="M5.229 69.625C4.455 69.625 4 68.494 4 67.719V38.661c0-1.911 1.447-3.731 3.258-3.989.175-.029.285-.047.483-.047h21.525c7.137 0 12.751-5.86 12.751-13.027 0-7.096-5.528-12.841-12.586-13.177-.002 0-.671.016-1.41.016l-20.335.066C5.529 8.373 4 6.652 4 4.558V2.023C4 1.247 4.407.625 5.183.625h24.059c11.57 0 20.654 9.546 20.706 21.104 0 9.378-6.307 17.727-15.337 20.311-1.622.445-3.122.705-4.735.778L12 42.842v22.485c0 2.156-2.141 4.298-4.235 4.298H5.229z"></path></svg></span>
@@ -1013,19 +1050,19 @@ function App(props) {
                     {/* IMPORT WALLET  */}
                     <input className="hide-element" type="text" id="clipboard" />
                     <div ref={domImportWalletRef} id='importWallet' style={{ display: 'none' }}>
-                      <input ref={privateKeyRef} type="text" id='privateKey' placeholder="Private Key" />
-                      <button className="pivx-button-big" onClick={() => importWallet(i18n)}>
+                      <input ref={privateKeyRef} type="password" id='privateKey' placeholder={i18n.t("Private Key")} />
+                      <button className="pivx-button-big" onClick={() => guiImportWallet()}>
                         <span className="buttoni-icon"><i className="fas fa-file-upload fa-tiny-margin"></i></span>
-                        <span className="buttoni-text">{i18n.t('Import Wallet')}</span>
+                        <span ref={domImportWalletTextRef} className="buttoni-text" id="importWalletText">{i18n.t('Import Wallet')}</span>
                         <span className="buttoni-arrow"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M23.328 16.707L13.121 26.914a.5.5 0 01-.707 0l-2.828-2.828a.5.5 0 010-.707L16.964 16 9.586 8.621a.5.5 0 010-.707l2.828-2.828a.5.5 0 01.707 0l10.207 10.207a1 1 0 010 1.414z"></path></svg></span>
                       </button>
                     </div>
                     {/* IMPORT WALLET  */}
 
-                    <button className="pivx-button-big" onClick={() => toggleWallet()}>
+                    <button ref={domAccessWalletBtnRef} className="pivx-button-big" id="accessWalletBtn" onClick={() => toggleWallet()}>
                       <span className="buttoni-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 70"><path d="M3.497 25.717C1.401 25.588 0 23.847 0 21.753v-2.535c0-.775.149-1.593.925-1.593h22.719c2.173 0 3.941 1.861 3.941 4.034 0 2.174-1.769 3.988-3.941 3.988l-20.207.048c-.02 0 .08.023.06.022z"></path><path d="M5.229 69.625C4.455 69.625 4 68.494 4 67.719V38.661c0-1.911 1.447-3.731 3.258-3.989.175-.029.285-.047.483-.047h21.525c7.137 0 12.751-5.86 12.751-13.027 0-7.096-5.528-12.841-12.586-13.177-.002 0-.671.016-1.41.016l-20.335.066C5.529 8.373 4 6.652 4 4.558V2.023C4 1.247 4.407.625 5.183.625h24.059c11.57 0 20.654 9.546 20.706 21.104 0 9.378-6.307 17.727-15.337 20.311-1.622.445-3.122.705-4.735.778L12 42.842v22.485c0 2.156-2.141 4.298-4.235 4.298H5.229z"></path></svg></span>
 
-                      <span className="buttoni-text" id='wToggle'>{i18n.t('Access My Wallet')}</span>
+                      <span className="buttoni-text" ref={wToggleRef} id='wToggle'>{i18n.t('Access My Wallet')}</span>
 
                       <span className="buttoni-arrow"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M23.328 16.707L13.121 26.914a.5.5 0 01-.707 0l-2.828-2.828a.5.5 0 010-.707L16.964 16 9.586 8.621a.5.5 0 010-.707l2.828-2.828a.5.5 0 01.707 0l10.207 10.207a1 1 0 010 1.414z"></path></svg></span>
                     </button>
@@ -1043,7 +1080,7 @@ function App(props) {
               <div id="StakingTab" className="tabcontent">
                 {/* STAKING FEATURES  */}
                 <p id="info" className="minor-notif-subtext"><b><span>{i18n.t('New Feature')}</span></b><br /><span className="minor-notif-subtext" style={{ opacity: 0.9 }}>{i18n.t('MPW cold staking')}</span></p>
-                <div className="add-frame" style={{ width: '95% !important' }}>
+                <div className="add-frame" style={{ width: '95%' }}>
                   <div className="staking-banner-top">
                     <div id="staking-rectangle" className="col-md-4">
                       <div id="pivx-price-box">
@@ -1051,18 +1088,18 @@ function App(props) {
                           <div id="piv-price" className="staking-piv-icon"></div>
                         </div>
                         <div id="piv-price-amount">
-                          <p id="guiBalanceBoxStaking"><b id="guiBalanceStaking">~</b> PIV</p>
+                          <p ref={domGuiBalanceBoxStakingRef} id="guiBalanceBoxStaking"><b ref={domGuiBalanceStakingRef} id="guiBalanceStaking">~</b> PIV</p>
                         </div>
                       </div>
                       <div id="staking-box">
-                        <h3 id="stake-title" className="noselect" ><span>{i18n.t('Staking')} </span>&nbsp;&nbsp;<span id="balanceReloadStaking" className="reload noselect" onClick={() => refreshChainData()}>&#x21bb;</span></h3>
+                        <h3 id="stake-title" className="noselect" ><span>{i18n.t('Staking')} </span>&nbsp;&nbsp;<span ref={domBalanceReloadStakingRef} id="balanceReloadStaking" className="reload noselect" onClick={() => refreshChainData()}>&#x21bb;</span></h3>
                       </div>
                     </div>
                   </div>
                   <br />
                   <div className="staking-banner-bottom">
                     <div className="stake-box large-box col-md-5">
-                      <h5 id="availToDelegate" className="stake-balances">{i18n.t('Available 0')}</h5>
+                      <h5 ref={domAvailToDelegateRef} id="availToDelegate" className="stake-balances">{i18n.t('Available 0')}</h5>
                       <textarea id="delegateAmount" className="stake-input form-control private-key-area"></textarea>
                       <div className="button-padd">
                         <button className="pivx-button-big" onClick={() => delegateGUI()}>
@@ -1073,7 +1110,7 @@ function App(props) {
                       </div>
                     </div>
                     <div className="stake-box large-box col-md-5">
-                      <h5 id="availToUndelegate" className="stake-balances">{i18n.t('Staking 0')}</h5>
+                      <h5 ref={domAvailToUndelegateRef} id="availToUndelegate" className="stake-balances">{i18n.t('Staking 0')}</h5>
                       <textarea id="undelegateAmount" className="stake-input form-control private-key-area"></textarea>
                       <div className="button-padd">
                         <button className="pivx-button-big" onClick={() => undelegateGUI()}>
@@ -1099,9 +1136,9 @@ function App(props) {
                 <br />
                 {/* PIVX TITLE SECTION  */}
 
-                <div id='errorNotice' className="col-md-12 float-left"></div>
+                <div ref={errorNoticeRef} id='errorNotice' className="col-md-12 float-left"></div>
                 <div className="col-md-12">
-                  <p id="comunication" className="center-text">{i18n.t('no shielded')}</p>
+                  <p id="communication" className="center-text">{i18n.t('no shielded')}</p>
                 </div>
                 <div className='max-width' style={{ clear: 'both' }}>
                   <div id="simpleTransactionsDropdown" className="bold-trans" onClick={() => toggleDropDown("simpleTransactions")}>{i18n.t('Create Simple Transactions')}<span
@@ -1219,17 +1256,8 @@ function App(props) {
 }
 
 export default withTranslation()(App);
-export { privateKeyRef, domGenKeyWarningRef, domPrivateTxtRef, domGuiAddressRef, domGuiBalanceRef, domGuiBalanceBoxRef, domPrivateQrRef, domPublicQrRef, domModalQrLabelRef, domModalQRRef, domIdenticonRef, domGuiWalletRef, domPrefixRef, domGenerateWalletRef, domImportWalletRef, domGenVanityWalletRef, domAccessWalletRef };
-export const domBalanceReload = document.getElementById("balanceReload");
-export const domBalanceReloadStaking = document.getElementById("balanceReloadStaking");
-export const domAvailToDelegate = document.getElementById('availToDelegate');
-export const domGuiBalanceStaking = document.getElementById("guiBalanceStaking");
-export const domGuiBalanceBoxStaking = document.getElementById("guiBalanceBoxStaking");
-export const domAvailToUndelegate = document.getElementById('availToUndelegate');
+export { privateKeyRef, errorNoticeRef, domGuiBalanceBoxStakingRef, domAvailToUndelegateRef, domAvailToDelegateRef, domGuiBalanceStakingRef, networkEnabledVar, publicKeyForNetwork, domGenKeyWarningRef, domBalanceReloadRef, domBalanceReloadStakingRef, domPrivateTxtRef, guiViewKeyRef, domGuiAddressRef, domGuiBalanceRef, domGuiBalanceBoxRef, domPrivateQrRef, domPublicQrRef, domModalQrLabelRef, domModalQRRef, domIdenticonRef, domGuiWalletRef, domPrefixRef, domGenerateWalletRef, domImportWalletRef, domGenVanityWalletRef, domAccessWalletRef };
 export const domAddress1s = document.getElementById("address1s");
 export const domTxOutput = document.getElementById("transactionFinal");
 export const domSimpleTXs = document.getElementById("simpleTransactions");
 export const domValue1s = document.getElementById("value1s");
-export const domGuiViewKey = document.getElementById('guiViewKey');
-export const domNetwork = document.getElementById('Network');
-export const domDebug = document.getElementById('Debug');

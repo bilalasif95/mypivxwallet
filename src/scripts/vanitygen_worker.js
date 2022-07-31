@@ -9,7 +9,7 @@ import './libs/ripemd160.js';
 import './libs/sha256.js'
 
 import { Secp256k1 } from "./libs/secp256k1";
-import { getPublicKey } from "./libs/noble-secp256k1";
+import { getPublicKey, bytesToHex } from "./libs/noble-secp256k1";
 import jsSHA from "./libs/sha256";
 import { ripemd160 } from "./libs/ripemd160";
 
@@ -21,8 +21,8 @@ const PUBKEY_ADDRESS = 30;
 
 // const nSecp256k1 = nobleSecp256k1.default;
 
-// B58 Encoding Map
-const MAP = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+// Base58 Encoding Map
+const MAP_B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 // ByteArray to B58
 var to_b58 = function (
@@ -47,7 +47,7 @@ var to_b58 = function (
     }
   }
   while (j--)        //since the base58 digits are backwards, loop through them in reverse order
-    s += MAP[d[j]];  //lookup the character associated with each base58 digit
+    s += MAP_B58[d[j]];  //lookup the character associated with each base58 digit
   return s;          //return the final base58 string
 }
 //B58 to ByteArray
@@ -62,7 +62,7 @@ var to_b58 = function (
 //     n;        //a temporary placeholder variable for the current byte
 //   for (i in S) { //loop through each base58 character in the input string
 //     j = 0;                             //reset the byte iterator
-//     c = MAP.indexOf(S[i]);           //set the initial carry amount equal to the current base58 digit
+//     c = MAP_B58.indexOf(S[i]);           //set the initial carry amount equal to the current base58 digit
 //     if (c < 0)                         //see if the base58 digit lookup is invalid (-1)
 //       return undefined;                //if invalid base58 digit, bail out and return undefined
 //     // eslint-disable-next-line no-unused-expressions
@@ -81,55 +81,59 @@ var to_b58 = function (
 // }
 
 // Cryptographic Random-Gen
-function getSafeRand() {
-  const r = new Uint8Array(32);
-  crypto.getRandomValues(r);
-  return r;
+function getSafeRand(nSize = 32) {
+  return crypto.getRandomValues(new Uint8Array(nSize));
 }
 
 // Writes a sequence of Array-like bytes into a location within a Uint8Array
 function writeToUint8(arr, bytes, pos) {
-  const len = arr.length;
-  let i = 0;
-  for (pos; pos < len; pos++) {
-    arr[pos] = bytes[i];
-    if (!Number.isSafeInteger(bytes[i++])) break;
+  const arrLen = arr.length;
+  // Sanity: ensure an overflow cannot occur, if one is detected, somewhere in MPW's state could be corrupted.
+  if ((arrLen - pos) - bytes.length < 0) {
+    const strERR = 'CRITICAL: Overflow detected (' + ((arrLen - pos) - bytes.length) + '), possible state corruption, backup and refresh advised.';
+    alert(strERR);
+    throw Error(strERR);
   }
+  let i = 0;
+  while (pos < arrLen)
+    arr[pos++] = bytes[i++];
 }
 
+/* MPW constants */
+const pubKeyHashNetworkLen = 21;
+const pubChksum = 4;
+const pubPrebaseLen = pubKeyHashNetworkLen + pubChksum;
+
+const cKeypair = {
+  'pub': '',
+  'priv': new Uint8Array()
+}
+
+// Precompute buffers
+const pubKeyHashNetwork = new Uint8Array(pubKeyHashNetworkLen);
+pubKeyHashNetwork[0] = PUBKEY_ADDRESS;
+const pubKeyPreBase = new Uint8Array(pubPrebaseLen);
+
 while (true) {
-  const pkBytes = getSafeRand();
+  cKeypair.priv = getSafeRand();
 
   // Public Key Derivation
-  let nPubkey = Crypto.util.bytesToHex(getPublicKey(pkBytes)).substr(2);
+  const nPubkey = bytesToHex(getPublicKey(cKeypair.priv)).substr(2);
   const pubY = Secp256k1.uint256(nPubkey.substr(64), 16);
-  nPubkey = nPubkey.substr(0, 64);
-  const publicKeyBytesCompressed = Crypto.util.hexToBytes(nPubkey);
-  if (pubY.isEven()) {
-    publicKeyBytesCompressed.unshift(0x02);
-  } else {
-    publicKeyBytesCompressed.unshift(0x03);
-  }
-  // First pubkey SHA-256 hash
+  const publicKeyBytesCompressed = Crypto.util.hexToBytes(nPubkey.substr(0, 64));
+  publicKeyBytesCompressed.unshift(pubY.isEven() ? 0x02 : 0x03);
+  // First pubkey SHA-256 Hash
   const pubKeyHashing = new jsSHA(0, 0, { "numRounds": 1 });
   pubKeyHashing.update(publicKeyBytesCompressed);
-  // RIPEMD160 hash
-  const pubKeyHashRipemd160 = ripemd160(pubKeyHashing.getHash(0));
-  // Network Encoding
-  const pubKeyHashNetworkLen = pubKeyHashRipemd160.length + 1;
-  const pubKeyHashNetwork = new Uint8Array(pubKeyHashNetworkLen);
-  pubKeyHashNetwork[0] = PUBKEY_ADDRESS;
-  writeToUint8(pubKeyHashNetwork, pubKeyHashRipemd160, 1);
-  // Double SHA-256 hash
+  // RIPEMD160 Hash + Network Encoding
+  writeToUint8(pubKeyHashNetwork, ripemd160(pubKeyHashing.getHash(0)), 1);
+  // Double SHA-256 Hash
   const pubKeyHashingS = new jsSHA(0, 0, { "numRounds": 2 });
   pubKeyHashingS.update(pubKeyHashNetwork);
-  const pubKeyHashingSF = pubKeyHashingS.getHash(0);
-  // Checksum
-  const checksumPubKey = pubKeyHashingSF.slice(0, 4);
-  // Public key pre-base58
-  const pubKeyPreBase = new Uint8Array(pubKeyHashNetworkLen + checksumPubKey.length);
+  // Digest Hash, Slice Checksum & finish the prebase key
   writeToUint8(pubKeyPreBase, pubKeyHashNetwork, 0);
-  writeToUint8(pubKeyPreBase, checksumPubKey, pubKeyHashNetworkLen);
+  writeToUint8(pubKeyPreBase, (pubKeyHashingS.getHash(0)).slice(0, 4), pubKeyHashNetworkLen);
+  cKeypair.pub = to_b58(pubKeyPreBase);
 
-  postMessage({ 'pub': to_b58(pubKeyPreBase), 'priv': pkBytes });
+  postMessage(cKeypair);
 }
