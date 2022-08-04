@@ -740,7 +740,7 @@ function App(props) {
               {/* Language drop down */}
               <select onChange={(e) => onLanguageChange(e.target.value)} className="locale-switcher">
                 <option value="en">English</option>
-                <option value="de">German</option>
+                <option value="nl">Nederlands</option>
               </select>
 
               {/* SIDE NAVBAR */}

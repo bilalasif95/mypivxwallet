@@ -2,7 +2,7 @@ import i18n from "i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 import XHR from "i18next-xhr-backend";
 import { en } from "./lang/en";
-import { de } from "./lang/de";
+import { nl } from "./lang/nl";
 
 i18n.use(XHR).use(LanguageDetector).init({
     // we init with resources
@@ -10,8 +10,8 @@ i18n.use(XHR).use(LanguageDetector).init({
         en: {
             translations: en
         },
-        de: {
-            translations: de
+        nl: {
+            translations: nl
         },
     },
     // lng:"eng",

@@ -403,7 +403,7 @@ export async function decryptWallet(i18n, strPassword = '') {
       alert("Incorrect password!");
     return false;
   }
-  importWallet(decWif);
+  importWallet(i18n, decWif);
   return true;
 }
 
