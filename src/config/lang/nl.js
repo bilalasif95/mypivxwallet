@@ -10,8 +10,8 @@ export const nl = {
 		"Welcome to": "Welkom bij",
 		"My PIVX Wallet": "Mijn PIVX Wallet!",
 		"Be your own Bank": "Ben je eigen Bank!",
-		"no custody1": "Mijn PIVX WALLET heeft",
-		"no custody2": "Geen controle", 
+		"no custody1": "Mijn PIVX WALLET heeft ",
+		"no custody2": "Geen controle ", 
 		"no custody3": "over je tegoeden. Jij bent volledig in zeggenschap van je keys en PIV.",
 		"KNOW MORE": "MEER WETEN",
 		"Universal and Portable": "Universeel en Mobiel",
@@ -122,18 +122,16 @@ export const nl = {
         "Enabled": "Ingeschakeld",
         "Disabled": "Uitgeschakeld",
 		"debug_on": "DEBUG MODE AAN",
-
 		"warning_msg": "jouw versie is verouderd, AUB update tot de nieuwste stabiele versie bij",
 		"MyPIVXWallet Github": "MyPIVXWallet Github",
 		"Description (from the merchant)": "Beschrijving (van de leverancier)",
 		"custom (In Development)": "custom (In Ontwikkeling)",
 		"© MIT 2022 - Built with 💜 by PIVX Labs -": "© MIT 2022 - Gemaakt met 💜 door PIVX Labs -",
 		"Donate!": "Doneer!",
-		"Do you really want to import a new address? If you haven't saved the last private key, the key will get LOST forever alongside ANY funds with it.": "Wil je echt een nieuw adres importeren? Als je je laatste private key niet opgeslagen hebt, zal de key voor altijd VERLOREN gaan, alsmede ALLE tegoeden.",
+		"Do you really want to import a new address? If you haven't saved the last private key, the wallet will be LOST forever.": "Wil je echt een nieuw adres importeren? Als je je laatste private key niet opgeslagen hebt, zal de key voor altijd VERLOREN gaan, alsmede ALLE tegoeden.",
 		"Do you really want to generate a new address? If you haven't saved the last private key the key will get lost forever and any funds with it.": "Wil je echt een nieuw adres genereren? Als je je laatste private key niet opgeslagen hebt, zal de key voor altijd verloren gaan, alsmede alle tegoeden.",
 		"Please enter your wallet encryption password": "AUB geef uw wallet encryptie wachtwoord",
 		"Please enter your wallet unlock password": "AUB geef uw wallet unlock wachtwoord",
-
 		"Set Password": "Stel een wachtwoord in",
 		"That password is a little short!": "Dat wachtwoord is een beetje te kort",
 		"Use at least": "Gebruik ten minste",
@@ -151,5 +149,11 @@ export const nl = {
 		"Staking Address set!": "Staking Adres ingesteld!",
 		"undelegate_alert": "Nu ga je gang en unstake!",
 		"Now go ahead and stake!": "Nu ga je gang en stake!",
+		"Note": "Opmerking:",
+		"You don't have any funds, get some coins first!": "Je hebt geen tegoeden, haal eerst wat munten!",
+
+		"Double-check where your key came from!": "Dubbel-check waar je key vandaan kwam!",
+		"Failed to import!": "Importeren mislukt!",
+		"Invalid private key": "Ongeldige private key.",
 
 }

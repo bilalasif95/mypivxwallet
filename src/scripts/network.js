@@ -7,7 +7,7 @@ import axios from "axios";
 
 function networkError(i18n) {
   if (disableNetwork()) {
-    createAlert(i18n, 'warning', "You can attempt re-connect via the Settings.", "Failed to synchronize!", "Please try again later.");
+    createAlert(i18n, 'warning', "You can attempt re-connect via the Settings.", "", "Failed to synchronize!", "Please try again later.");
   }
 }
 
@@ -36,7 +36,7 @@ if (networkEnabled) {
       let cachedUTXOs = [];
       if (!data.unspent_outputs || data.unspent_outputs.length === 0) {
         console.log('No unspent Transactions');
-        errorNoticeRef.current.innerHTML = '<div class="alert alert-danger" role="alert"><h4>Note:</h4><h5>You don\'t have any funds, get some coins first!</h5></div>';
+        errorNoticeRef.current.innerHTML = `<div class="alert alert-danger" role="alert"><h4>${i18n.t("Note")}</h4><h5>${i18n.t("You don't have any funds, get some coins first!")}</h5></div>`;
       } else {
         errorNoticeRef.current.innerHTML = '';
         // Standardize the API UTXOs into a simplified MPW format
@@ -133,10 +133,10 @@ if (networkEnabled) {
         domSimpleTXs.style.display = 'none';
         domAddress1s.value = '';
         domValue1s.innerHTML = '';
-        createAlert(i18n, 'success', msg || 'Transaction sent!', boldMessage, "", msg ? (1250 + (msg.length * 50)) : 1500);
+        createAlert(i18n, 'success', msg || 'Transaction sent!', boldMessage, "", "", msg ? (1250 + (msg.length * 50)) : 1500);
       } else {
         console.log('Error sending transaction: ' + data);
-        createAlert(i18n, 'warning', 'Transaction Failed!', "", "", 1250);
+        createAlert(i18n, 'warning', 'Transaction Failed!', "", "", "", 1250);
         // Attempt to parse and prettify JSON (if any), otherwise, display the raw output.
         let strError = data;
         try {

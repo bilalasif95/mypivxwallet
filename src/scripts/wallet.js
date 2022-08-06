@@ -8,6 +8,7 @@ import { qrcode } from "./libs/qrcode";
 // import { jdenticon } from "./libs/jdenticon.min";
 import { getUnspentTransactions } from "./network";
 import { encrypt, decrypt } from "./libs/aes-gcm";
+import { createAlert } from "./misc";
 
 // Base58 Encoding Map
 const MAP_B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -73,7 +74,7 @@ const pubKeyHashNetworkLen = 21;
 const pubChksum = 4;
 const pubPrebaseLen = pubKeyHashNetworkLen + pubChksum;
 
-var walletAlreadyMade = 0;
+var fWalletLoaded = false;
 var privateKeyForTransactions;
 var publicKeyForNetwork;
 var viewPrivKey;
@@ -83,13 +84,9 @@ const PUBKEY_ADDRESS = 30;
 // document.getElementById('dcfooter').innerHTML = '© MIT 2022 - Built with 💜 by PIVX Labs - <b style=\'cursor:pointer\' onclick=\'openDonatePage()\'>Donate!</b><br><a href="https://github.com/PIVX-Labs/MyPIVXWallet">MyPIVXWallet</a>';
 // Wallet Import
 export function importWallet(i18n, newWif = false, raw = false) {
-  if (walletAlreadyMade !== 0) {
-    var walletConfirm = window.confirm(i18n.t("Do you really want to import a new address? If you haven't saved the last private key, the key will get LOST forever alongside ANY funds with it."));
-  } else {
-    walletConfirm = true;
-  }
+  const strImportConfirm = i18n.t("Do you really want to import a new address? If you haven't saved the last private key, the wallet will be LOST forever.");
+  const walletConfirm = fWalletLoaded ? window.confirm(strImportConfirm) : true;
   if (walletConfirm) {
-    walletAlreadyMade++;
     if (raw) {
       const pkNetBytesLen = newWif.length + 2;
       const pkNetBytes = new Uint8Array(pkNetBytesLen);
@@ -124,8 +121,16 @@ export function importWallet(i18n, newWif = false, raw = false) {
       console.log(bytesToHex(privkeyBytes));
     }
     // Public Key Derivation
-    let nPubkey = bytesToHex(getPublicKey(privkeyBytes)).substr(2);
-    const pubY = uint256(nPubkey.substr(64), 16);
+    let nPubkey = '';
+    let pubY;
+    try {
+      // Incase of an invalid/malformed/incompatible private key: catch and display a nice error!
+      nPubkey = bytesToHex(getPublicKey(privkeyBytes)).substr(2);
+      pubY = uint256(nPubkey.substr(64), 16);
+    } catch (e) {
+      console.error(e);
+      createAlert(i18n, 'warning', 'Double-check where your key came from!', '', 'Failed to import!', 'Invalid private key', 6000);
+    }
     nPubkey = nPubkey.substr(0, 64);
     const publicKeyBytesCompressed = Crypto.util.hexToBytes(nPubkey);
     publicKeyBytesCompressed.unshift(pubY.isEven() ? 0x02 : 0x03);
@@ -150,6 +155,9 @@ export function importWallet(i18n, newWif = false, raw = false) {
     writeToUint8(pubKeyPreBase, checksumPubKey, pubKeyHashNetworkLen);
     // Encode as Base58 human-readable network address
     publicKeyForNetwork = to_b58(pubKeyPreBase);
+
+    // Reaching here: the deserialisation was a full cryptographic success, so a wallet is now imported!
+    fWalletLoaded = true;
 
     // Display Text
     domGuiAddressRef.current.innerHTML = publicKeyForNetwork;
@@ -243,13 +251,9 @@ function getSafeRand(nSize = 32) {
 
 // Wallet Generation
 export async function generateWallet(i18n, noUI = false) {
-  if (walletAlreadyMade !== 0 && !noUI) {
-    var walletConfirm = window.confirm(i18n.t("Do you really want to generate a new address? If you haven't saved the last private key the key will get lost forever and any funds with it."));
-  } else {
-    walletConfirm = true;
-  }
+  const strImportConfirm = i18n.t("Do you really want to import a new address? If you haven't saved the last private key, the wallet will be LOST forever.");
+  const walletConfirm = fWalletLoaded && !noUI ? window.confirm(strImportConfirm) : true;
   if (walletConfirm) {
-    walletAlreadyMade++;
     const pkBytes = getSafeRand();
     // Private Key Generation
     const pkNetBytesLen = pkBytes.length + 2;
@@ -296,6 +300,8 @@ export async function generateWallet(i18n, noUI = false) {
     writeToUint8(pubKeyPreBase, checksumPubKey, pubKeyHashNetworkLen);
     // Encode as Base58 human-readable network address
     publicKeyForNetwork = to_b58(pubKeyPreBase);
+
+    fWalletLoaded = true;
 
     // Debug Console
     if (debug) {

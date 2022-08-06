@@ -3,7 +3,7 @@ import { withTranslation } from 'react-i18next'
 import { createRef, useEffect, useState } from 'react';
 // import { debug, networkEnabled, toggleDebug, toggleNetwork } from "./scripts/settings";
 import { hasEncryptedWallet, decryptWallet, importWallet, generateWallet, encryptWallet } from "./scripts/wallet";
-import { calculatefee, sendTransaction, getBlockCount } from "./scripts/network";
+import { calculatefee, sendTransaction, getBlockCount, getUnspentTransactions } from "./scripts/network";
 import { bitjs } from "./scripts/bitTrx";
 import { createAlert } from "./scripts/misc";
 // import { jdenticon } from "./scripts/libs/jdenticon.min";
@@ -64,6 +64,7 @@ function App(props) {
   const MAP_B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
   function onLanguageChange(lang) {
     i18n.changeLanguage(lang)
+    getUnspentTransactions(i18n)
   }
   const startRef = createRef();
   useEffect(() => {
@@ -294,10 +295,10 @@ function App(props) {
       // Fetch our inputs, ensure they're of decent entropy + match eachother
       const strPass = domEncryptPasswordFirstRef.current.value,
         strPassRetype = domEncryptPasswordSecondRef.current.value;
-      if (strPass.length < MIN_PASS_LENGTH) return createAlert(i18n, 'warning', 'That password is a little short!', "", "", 4000, "Use at least", MIN_PASS_LENGTH, "characters.");
-      if (strPass !== strPassRetype) return createAlert(i18n, 'warning', "Your passwords don't match!", "", "", 2250);
+      if (strPass.length < MIN_PASS_LENGTH) return createAlert(i18n, 'warning', 'That password is a little short!', "", "", "", 4000, "Use at least", MIN_PASS_LENGTH, "characters.");
+      if (strPass !== strPassRetype) return createAlert(i18n, 'warning', "Your passwords don't match!", "", "", "", 2250);
       encryptWallet(i18n, strPass);
-      createAlert(i18n, 'success', "Nice stuff, Armoured PIVian!", "You're Secured! 🔐", "", 5500);
+      createAlert(i18n, 'success', "Nice stuff, Armoured PIVian!", "You're Secured! 🔐", "", "", 5500);
     }
   }
 
@@ -392,15 +393,15 @@ function App(props) {
   function undelegateGUI() {
     // Verify the amount
     const nAmount = Number(document.getElementById('undelegateAmount').value);
-    if (nAmount < 0.01) return createAlert(i18n, 'warning', 'Minimum_amount', "", "", 2000);
+    if (nAmount < 0.01) return createAlert(i18n, 'warning', 'Minimum_amount', "", "", "", 2000);
     undelegate(nAmount);
   }
   function undelegate(value) {
     if (!publicKeyForNetwork) {
       if (hasEncryptedWallet())
-        createAlert(i18n, 'warning', "Please unlock your wallet before sending transactions!", "", "", 3000);
+        createAlert(i18n, 'warning', "Please unlock your wallet before sending transactions!", "", "", "", 3000);
       else
-        createAlert(i18n, 'warning', "Please import/create your wallet before sending transactions!", "", "", 3250);
+        createAlert(i18n, 'warning', "Please import/create your wallet before sending transactions!", "", "", "", 3250);
       return;
     }
 
@@ -464,7 +465,7 @@ function App(props) {
   function delegateGUI() {
     // Verify the amount
     const nAmount = Number(document.getElementById('delegateAmount').value);
-    if (nAmount < 1) return createAlert(i18n, 'warning', 'minimum_staking', "", "", 2000);
+    if (nAmount < 1) return createAlert(i18n, 'warning', 'minimum_staking', "", "", "", 2000);
 
     // Ensure the user has an address set - if not, request one!
     if (!askForCSAddr()) return;
@@ -554,7 +555,7 @@ function App(props) {
   //     domGenIt.innerHTML = "Continue";
   //   } else {
   //     console.warn("Amount: " + value + "\nFee: " + nFee + "\nChange: " + valuechange + "\nTOTAL: " + totalSent);
-  //     createAlert(i18n, 'warning', 'You are trying to send more than you have!', "", "", 2500);
+  //     createAlert(i18n, 'warning', 'You are trying to send more than you have!', "", "", "", 2500);
   //   }
   // }
 
@@ -562,9 +563,9 @@ function App(props) {
     if (!networkEnabled) return alert(i18n.t("offline_send"));
     if (!publicKeyForNetwork) {
       if (hasEncryptedWallet())
-        createAlert(i18n, 'warning', "Please unlock your wallet before sending transactions!", "", "", 2500);
+        createAlert(i18n, 'warning', "Please unlock your wallet before sending transactions!", "", "", "", 2500);
       else
-        createAlert(i18n, 'warning', "Please import/create your wallet before sending transactions!", "", "", 2500);
+        createAlert(i18n, 'warning', "Please import/create your wallet before sending transactions!", "", "", "", 2500);
       return;
     }
     const address = domAddress1s.value;
@@ -618,7 +619,7 @@ function App(props) {
         domGenIt.innerHTML = "Continue";
       } else {
         console.warn("Amount: " + value + "\nFee: " + nFee + (fNoChange ? "" : "\nChange: " + valuechange) + "\nTOTAL: " + totalSent);
-        createAlert(i18n, 'warning', "You're trying to send more than you have!", "", "", 2500);
+        createAlert(i18n, 'warning', "You're trying to send more than you have!", "", "", "", 2500);
       }
     } else {
       console.log("No address or value");

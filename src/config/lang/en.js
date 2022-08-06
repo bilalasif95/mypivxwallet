@@ -122,18 +122,16 @@ export const en = {
         "Enabled": "Enabled",
         "Disabled": "Disabled",
 		"debug_on": "DEBUG MODE ON",
-
 		"warning_msg": "your version is outdated, please update to the newest stable version at the",
 		"MyPIVXWallet Github": "MyPIVXWallet Github",
 		"Description (from the merchant)": "Description (from the merchant)",
 		"custom (In Development)": "custom (In Development)",
 		"© MIT 2022 - Built with 💜 by PIVX Labs -": "© MIT 2022 - Built with 💜 by PIVX Labs -",
 		"Donate!": "Donate!",
-		"Do you really want to import a new address? If you haven't saved the last private key, the key will get LOST forever alongside ANY funds with it.": "Do you really want to import a new address? If you haven't saved the last private key, the key will get LOST forever alongside ANY funds with it.",
+		"Do you really want to import a new address? If you haven't saved the last private key, the wallet will be LOST forever.": "Do you really want to import a new address? If you haven't saved the last private key, the wallet will be LOST forever.",
 		"Do you really want to generate a new address? If you haven't saved the last private key the key will get lost forever and any funds with it.": "Do you really want to generate a new address? If you haven't saved the last private key the key will get lost forever and any funds with it.",
 		"Please enter your wallet encryption password": "Please enter your wallet encryption password",
 		"Please enter your wallet unlock password": "Please enter your wallet unlock password",
-
 		"Set Password": "Set Password",
 		"That password is a little short!": "That password is a little short!",
 		"Use at least": "Use at least",
@@ -151,5 +149,11 @@ export const en = {
 		"Staking Address set!": "Staking Address set!",
 		"undelegate_alert": "Now go ahead and unstake!",
 		"Now go ahead and stake!": "Now go ahead and stake!",
+		"Note": "Note:",
+		"You don't have any funds, get some coins first!": "You don't have any funds, get some coins first!",
 		
+		"Double-check where your key came from!": "Double-check where your key came from!",
+		"Failed to import!": "Failed to import!",
+		"Invalid private key": "Invalid private key.",
+
 }
