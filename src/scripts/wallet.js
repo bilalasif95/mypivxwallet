@@ -1,4 +1,4 @@
-import { privateKeyRef, domGuiAddressRef, domGuiWalletRef, domPrivateTxtRef, domPrivateQrRef, domPublicQrRef, domModalQrLabelRef, domModalQRRef, guiViewKeyRef, domIdenticonRef, domGenKeyWarningRef, domPrefixRef, domGenerateWalletRef, domImportWalletRef, domGenVanityWalletRef, domAccessWalletRef, domGuiBalanceRef, domGuiBalanceBoxRef } from "../../src/App";
+import { privateKeyRef, domGuiAddressRef, domGuiWalletRef, domPrivateTxtRef, domPrivateQrRef, domPublicQrRef, domModalQrLabelRef, domModalQRRef, guiViewKeyRef, domIdenticonRef, domGenKeyWarningRef, domPrefixRef, domGenerateWalletRef, domImportWalletRef, domGenVanityWalletRef, domAccessWalletRef } from "../../src/App";
 import { debug, networkEnabled } from "../scripts/settings";
 import { getPublicKey, bytesToHex } from "./libs/noble-secp256k1";
 import { uint256 } from "./libs/secp256k1";
@@ -6,7 +6,7 @@ import jsSHA from "./libs/sha256";
 import { ripemd160 } from "./libs/ripemd160";
 import { qrcode } from "./libs/qrcode";
 // import { jdenticon } from "./libs/jdenticon.min";
-import { getUnspentTransactions } from "./network";
+import { getUTXOs, getBalance, getStakingBalance } from "./network";
 import { encrypt, decrypt } from "./libs/aes-gcm";
 import { createAlert } from "./misc";
 
@@ -207,7 +207,7 @@ export function importWallet(i18n, newWif = false, raw = false) {
     }
     // Load UTXOs from explorer
     if (networkEnabled)
-      getUnspentTransactions(i18n);
+      getUTXOs(i18n);
 
     // Hide all wallet starter options
     hideAllWalletOptions();
@@ -341,9 +341,10 @@ export async function generateWallet(i18n, noUI = false) {
       domGenKeyWarningRef.current.style.display = 'block';
       domPrivateTxtRef.current.value = privateKeyForTransactions;
       domGuiAddressRef.current.innerHTML = publicKeyForNetwork;
-      // New address... so there definitely won't be a balance
-      domGuiBalanceRef.current.innerHTML = "0";
-      domGuiBalanceBoxRef.current.style.fontSize = "x-large";
+      // // New address... so there definitely won't be a balance
+      // domGuiBalanceRef.current.innerHTML = "0";
+      // domGuiBalanceBoxRef.current.style.fontSize = "x-large";
+
       // QR Codes
       const typeNumber = 4;
       const errorCorrectionLevel = 'L';
@@ -364,12 +365,17 @@ export async function generateWallet(i18n, noUI = false) {
       domModalQRRef.current.firstChild.style.height = "auto";
       domModalQRRef.current.firstChild.style.imageRendering = "crisp-edges";
       document.getElementById('clipboard').value = publicKeyForNetwork;
+
       // Update identicon
       domIdenticonRef.current.dataset.jdenticonValue = publicKeyForNetwork;
       // jdenticon();
       domGuiWalletRef.current.style.display = 'block';
       viewPrivKey = false;
       hideAllWalletOptions();
+
+      // Refresh the balance UI (why? because it'll also display any 'get some funds!' alerts)
+      getBalance(true);
+      getStakingBalance(true);
     }
     return { 'pubkey': publicKeyForNetwork, 'privkey': privateKeyForTransactions };
   }
@@ -416,3 +422,5 @@ export async function decryptWallet(i18n, strPassword = '') {
 export function hasEncryptedWallet() {
   return localStorage.getItem("encwif") ? true : false;
 }
+
+export { publicKeyForNetwork };

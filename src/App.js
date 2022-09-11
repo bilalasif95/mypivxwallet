@@ -3,7 +3,7 @@ import { withTranslation } from 'react-i18next'
 import { createRef, useEffect, useState } from 'react';
 // import { debug, networkEnabled, toggleDebug, toggleNetwork } from "./scripts/settings";
 import { hasEncryptedWallet, decryptWallet, importWallet, generateWallet, encryptWallet } from "./scripts/wallet";
-import { calculatefee, sendTransaction, getBlockCount, getUnspentTransactions } from "./scripts/network";
+import { calculatefee, sendTransaction, getBlockCount, getUTXOs } from "./scripts/network";
 import { bitjs } from "./scripts/bitTrx";
 import { createAlert } from "./scripts/misc";
 // import { jdenticon } from "./scripts/libs/jdenticon.min";
@@ -43,6 +43,13 @@ const domAvailToUndelegateRef = createRef();
 const domGuiBalanceBoxStakingRef = createRef();
 var networkEnabledVar = true;
 var publicKeyForNetwork;
+// A list of Labs-trusted explorers
+const arrExplorers = [
+  // Display name      Blockbook-compatible API base    
+  { name: "zkBitcoin", url: "https://zkbitcoin.com" },
+  { name: "rockdev", url: "https://explorer.rockdev.org" }
+]
+var cExplorer = arrExplorers[0];
 
 function App(props) {
   var privateKeyForTransactions;
@@ -60,11 +67,16 @@ function App(props) {
     networkEnabledVar = !networkEnabledVar
   }
 
+  function enableNetwork() {
+    if (!networkEnabled) return toggleNetwork();
+    return false;
+  }
+
   // Base58 Encoding Map
   const MAP_B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
   function onLanguageChange(lang) {
     i18n.changeLanguage(lang)
-    getUnspentTransactions(i18n)
+    getUTXOs(i18n)
   }
   const startRef = createRef();
   useEffect(() => {
@@ -72,6 +84,15 @@ function App(props) {
     startRef.current.click();
   }, []);
 
+  function setExplorer(explorer) {
+    cExplorer = explorer;
+    enableNetwork();
+    createAlert(i18n, 'success', 'Now using', "", "", "", 3500, "", "", "", explorer.name, "Switched explorer!");
+  }
+
+  const onExplorerChange = (evt) => {
+    setExplorer(arrExplorers.find(a => a.url === evt.target.value));
+  }
 
   //  IMPORTANT: CHAIN PARAMS BELOW, DO NOT EDIT UNLESS YOU'RE ABSOLUTELY CERTAIN YOU KNOW WHAT YOU'RE DOING
 
@@ -138,9 +159,12 @@ function App(props) {
     // Update the GUI too, if chosen
     if (updateGUI) {
       // Set the balance, and adjust font-size for large balance strings
-      const nLen = (nBalance / COIN).toString().length;
-      domGuiBalanceRef.current.innerText = (nBalance / COIN).toFixed(nLen >= 4 ? 0 : 2);
+      const nLen = (nBalance / COIN).toFixed(2).length;
+      domGuiBalanceRef.current.innerText = (nBalance / COIN).toFixed(nLen >= 6 ? 0 : 2);
       domAvailToDelegateRef.current.innerText = "Available: ~" + (nBalance / COIN).toFixed(2) + " PIV";
+
+      // Add a notice to the Send page if balance is lacking
+      errorNoticeRef.current.innerHTML = nBalance ? '' : `<div class="alert alert-danger" role="alert"><h4>${i18n.t("Note")}</h4><h5>${i18n.t("You don't have any funds, get some coins first!")}</h5></div>`;
     }
 
     return nBalance;
@@ -383,7 +407,7 @@ function App(props) {
   }
   // function loadUnspendInputs() {
   //   if (publicKeyForNetwork) {
-  //     getUnspentTransactions();
+  //     getUTXOs();
   //     domSimpleTXs.style.display = 'block';
   //     domGenIt.style.display = 'block';
   //   } else {
@@ -1137,7 +1161,7 @@ function App(props) {
                 <br />
                 {/* PIVX TITLE SECTION  */}
 
-                <div ref={errorNoticeRef} id='errorNotice' className="col-md-12 float-left"></div>
+                <div ref={errorNoticeRef} id='sendNotice' className="col-md-12 float-left"></div>
                 <div className="col-md-12">
                   <p id="communication" className="center-text">{i18n.t('no shielded')}</p>
                 </div>
@@ -1210,7 +1234,7 @@ function App(props) {
               </div>
               <div id="Settings" className="tabcontent">
                 {/* <form action="javascript:setExplorer()"> */}
-                <label htmlFor="explorer">{i18n.t('Choose an explorer')}</label><br />
+                {/* <label htmlFor="explorer">{i18n.t('Choose an explorer')}</label><br />
                 <select id="explorer" className="form-control" name="explorer">
                   <option value="cryptoid">https://chainz.cryptoid.info/pivx</option>
                   <option value="custom">{i18n.t('custom (In Development)')}</option>
@@ -1220,7 +1244,12 @@ function App(props) {
                   <span className="buttoni-icon"><i className="fas fa-paper-plane fa-tiny-margin"></i></span>
                   <span className="buttoni-text">{i18n.t('Submit')}</span>
                   <span className="buttoni-arrow"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M23.328 16.707L13.121 26.914a.5.5 0 01-.707 0l-2.828-2.828a.5.5 0 010-.707L16.964 16 9.586 8.621a.5.5 0 010-.707l2.828-2.828a.5.5 0 01.707 0l10.207 10.207a1 1 0 010 1.414z"></path></svg></span>
-                </button>
+                </button> */}
+                <label htmlFor="explorer">{i18n.t('Choose an explorer')}</label>
+                <br />
+                <select id="explorer" onChange={(evt) => onExplorerChange(evt)} className="form-control" name="explorer">
+                  {arrExplorers.map((res) => <option key={res.name} value={res.url}>{res.name}</option>)}
+                </select>
                 {/* </form> */}
                 <br />
 
@@ -1257,7 +1286,7 @@ function App(props) {
 }
 
 export default withTranslation()(App);
-export { privateKeyRef, errorNoticeRef, domGuiBalanceBoxStakingRef, domAvailToUndelegateRef, domAvailToDelegateRef, domGuiBalanceStakingRef, networkEnabledVar, publicKeyForNetwork, domGenKeyWarningRef, domBalanceReloadRef, domBalanceReloadStakingRef, domPrivateTxtRef, guiViewKeyRef, domGuiAddressRef, domGuiBalanceRef, domGuiBalanceBoxRef, domPrivateQrRef, domPublicQrRef, domModalQrLabelRef, domModalQRRef, domIdenticonRef, domGuiWalletRef, domPrefixRef, domGenerateWalletRef, domImportWalletRef, domGenVanityWalletRef, domAccessWalletRef };
+export { privateKeyRef, errorNoticeRef, domGuiBalanceBoxStakingRef, domAvailToUndelegateRef, domAvailToDelegateRef, domGuiBalanceStakingRef, networkEnabledVar, publicKeyForNetwork, cExplorer, domGenKeyWarningRef, domBalanceReloadRef, domBalanceReloadStakingRef, domPrivateTxtRef, guiViewKeyRef, domGuiAddressRef, domGuiBalanceRef, domGuiBalanceBoxRef, domPrivateQrRef, domPublicQrRef, domModalQrLabelRef, domModalQRRef, domIdenticonRef, domGuiWalletRef, domPrefixRef, domGenerateWalletRef, domImportWalletRef, domGenVanityWalletRef, domAccessWalletRef };
 export const domAddress1s = document.getElementById("address1s");
 export const domTxOutput = document.getElementById("transactionFinal");
 export const domSimpleTXs = document.getElementById("simpleTransactions");

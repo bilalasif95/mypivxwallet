@@ -155,5 +155,7 @@ export const en = {
 		"Double-check where your key came from!": "Double-check where your key came from!",
 		"Failed to import!": "Failed to import!",
 		"Invalid private key": "Invalid private key.",
+		"Switched explorer!": "Switched explorer!",
+		"Now using": "Now using {{name}}",
 
 }
