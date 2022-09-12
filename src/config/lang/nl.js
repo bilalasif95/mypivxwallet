@@ -155,7 +155,7 @@ export const nl = {
 		"Double-check where your key came from!": "Dubbel-check waar je key vandaan kwam!",
 		"Failed to import!": "Importeren mislukt!",
 		"Invalid private key": "Ongeldige private key.",
-		"Switched explorer!": "Switched explorer!",
-		"Now using": "Now using {{name}}",
+		"Switched explorer!": "Explorer verwisseld!",
+		"Now using": "Gebruikt nu {{name}}",
 
 }

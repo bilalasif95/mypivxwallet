@@ -13,6 +13,7 @@ function networkError(i18n) {
 }
 
 let cachedBlockCount = 0;
+let cachedUTXOs = [];
 if (networkEnabled) {
   var getBlockCount = function (i18n) {
     axios.get(cExplorer.url + "/api/v2/api").then((response) => {
@@ -70,7 +71,6 @@ if (networkEnabled) {
   //   getDelegatedUTXOs(i18n);
   // }
   var arrUTXOsToValidate = [];
-  let cachedUTXOs = [];
   let arrDelegatedUTXOs = [];
 
   var getBalance = (updateGUI) => {
@@ -216,4 +216,4 @@ if (networkEnabled) {
   }
 }
 
-export { getUTXOs, getBalance, getStakingBalance, calculatefee, sendTransaction, getBlockCount };
+export { getUTXOs, getBalance, getStakingBalance, cachedUTXOs, calculatefee, sendTransaction, getBlockCount };
