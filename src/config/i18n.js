@@ -6,6 +6,7 @@ import { nl } from "./lang/nl";
 import { de } from "./lang/de";
 import { es } from "./lang/es";
 import { sv } from "./lang/sv";
+import { it } from "./lang/it";
 
 i18n.use(XHR).use(LanguageDetector).init({
     // we init with resources
@@ -24,6 +25,9 @@ i18n.use(XHR).use(LanguageDetector).init({
         },
         sv: {
             translations: sv
+        },
+        it: {
+            translations: it
         },
     },
     // lng:"eng",

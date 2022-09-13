@@ -3,7 +3,7 @@ import { withTranslation } from 'react-i18next'
 import { createRef, useEffect, useState } from 'react';
 // import { debug, networkEnabled, toggleDebug, toggleNetwork } from "./scripts/settings";
 import { hasEncryptedWallet, decryptWallet, importWallet, generateWallet, encryptWallet } from "./scripts/wallet";
-import { calculatefee, sendTransaction, getBlockCount, getUTXOs, getBalance, getStakingBalance, cachedUTXOs } from "./scripts/network";
+import { calculatefee, sendTransaction, getBlockCount, getBalance, getStakingBalance, cachedUTXOs } from "./scripts/network";
 import { addcoldstakingoutput, addinput, serialize, addoutput, sign } from "./scripts/bitTrx";
 import { createAlert } from "./scripts/misc";
 // import { jdenticon } from "./scripts/libs/jdenticon.min";
@@ -47,7 +47,8 @@ var networkEnabledVar = true;
 const arrExplorers = [
   // Display name      Blockbook-compatible API base    
   { name: "zkBitcoin", url: "https://zkbitcoin.com" },
-  { name: "rockdev", url: "https://explorer.rockdev.org" }
+  { name: "rockdev", url: "https://explorer.rockdev.org" },
+  // { name: "testnet", url: "https://testnet.rockdev.org" }
 ]
 var cExplorer = arrExplorers[0];
 
@@ -76,7 +77,7 @@ function App(props) {
   const MAP_B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
   function onLanguageChange(lang) {
     i18n.changeLanguage(lang)
-    getUTXOs(i18n)
+    // getUTXOs(i18n)
   }
   const startRef = createRef();
   useEffect(() => {
@@ -84,7 +85,10 @@ function App(props) {
     startRef.current.click();
   }, []);
 
+  const [cExplorerr, setcExplorer] = useState(arrExplorers[0]);
+
   function setExplorer(explorer) {
+    setcExplorer(explorer)
     cExplorer = explorer;
     enableNetwork();
     createAlert(i18n, 'success', 'Now using', "", "", "", 3500, "", "", "", explorer.name, "Switched explorer!");
@@ -100,9 +104,9 @@ function App(props) {
   // These below params share the same names as the CPP params, so finding and editing these is easy-peasy!
 
   /* chainparams */
-  const PUBKEY_PREFIX = "D";
-  // const PUBKEY_ADDRESS = 30;
-  // const SECRET_KEY = 212;
+  const PUBKEY_PREFIX = cExplorerr.name === "testnet" ? "Y" : "D";
+  // const PUBKEY_ADDRESS = cExplorerr.name === "testnet" ? 30 : 139;
+  // const SECRET_KEY = cExplorerr.name === "testnet" ? 212 : 239;
   const COIN = 1e8;
 
   /* Internal tweaking parameters */
@@ -773,6 +777,7 @@ function App(props) {
                 <option value="es">Spanish</option>
                 <option value="de">German</option>
                 <option value="sv">Swedish</option>
+                <option value="it">Italian</option>
               </select>
 
               {/* SIDE NAVBAR */}
