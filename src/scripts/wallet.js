@@ -82,6 +82,15 @@ const SECRET_KEY = 212;
 const PUBKEY_ADDRESS = 30;
 // const nSecp256k1 = nobleSecp256k1.default;
 // document.getElementById('dcfooter').innerHTML = '© MIT 2022 - Built with 💜 by PIVX Labs - <b style=\'cursor:pointer\' onclick=\'openDonatePage()\'>Donate!</b><br><a href="https://github.com/PIVX-Labs/MyPIVXWallet">MyPIVXWallet</a>';
+
+// A safety mechanism enabled if the user attempts to leave without encrypting/saving their keys
+const beforeUnloadListener = (evt, i18n) => {
+  evt.preventDefault();
+  createAlert(i18n, "warning", "Dashboard ➜ Set Password", "Save your wallet!", "", "", 10000);
+  // Most browsers ignore this nowadays, but still, keep it 'just incase'
+  return evt.returnValue = i18n.t("Please ENCRYPT and/or BACKUP your keys before leaving, or you may lose them!");
+};
+
 // Wallet Import
 export function importWallet(i18n, newWif = false, raw = false) {
   const strImportConfirm = i18n.t("Do you really want to import a new address? If you haven't saved the last private key, the wallet will be LOST forever.");
@@ -104,6 +113,8 @@ export function importWallet(i18n, newWif = false, raw = false) {
       writeToUint8(keyWithChecksum, pkNetBytes, 0);
       writeToUint8(keyWithChecksum, checksum, pkNetBytesLen);
       newWif = to_b58(keyWithChecksum);
+      // A raw import likely means non-user owned key (i.e: created via VanityGen), thus, we assume safety first and add an exit blocking listener
+      window.addEventListener("beforeunload", (evt) => { beforeUnloadListener(evt, i18n) }, { capture: true });
     }
     // Wallet Import Format to Private Key
     const privkeyWIF = newWif || privateKeyRef.current.value;
@@ -376,7 +387,10 @@ export async function generateWallet(i18n, noUI = false) {
       // Refresh the balance UI (why? because it'll also display any 'get some funds!' alerts)
       getBalance(true);
       getStakingBalance(true);
+      // Add a listener to block page unloads until we are sure the user has saved their keys, safety first!
+      window.addEventListener("beforeunload", (evt) => { beforeUnloadListener(evt, i18n) }, { capture: true });
     }
+    // Return the keypair
     return { 'pubkey': publicKeyForNetwork, 'privkey': privateKeyForTransactions };
   }
 }
@@ -400,6 +414,8 @@ export async function encryptWallet(i18n, strPassword = '') {
   localStorage.setItem("encwif", encWIF);
   // Hide the encryption warning
   domGenKeyWarningRef.current.style.display = 'none';
+  // Remove the exit blocker, we can annoy the user less knowing the key is safe in their localstorage!
+  window.removeEventListener("beforeunload", (evt) => { beforeUnloadListener(evt, i18n) }, { capture: true });
 }
 
 export async function decryptWallet(i18n, strPassword = '') {

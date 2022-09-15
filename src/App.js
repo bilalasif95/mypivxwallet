@@ -772,12 +772,13 @@ function App(props) {
               </ul>
               {/* Language drop down */}
               <select defaultValue={i18n.language} onChange={(e) => onLanguageChange(e.target.value)} className="locale-switcher">
-                <option value="en">English</option>
-                <option value="nl">Dutch</option>
-                <option value="es">Spanish</option>
-                <option value="de">German</option>
-                <option value="sv">Swedish</option>
-                <option value="it">Italian</option>
+                <option value="en">🇬🇧 English</option>
+                <option value="nl">🇳🇱 Nederlands</option>
+                <option value="es">🇪🇸 Espanol</option>
+                <option value="de">🇩🇪 Deutsch</option>
+                <option value="sv">🇸🇪 Swedish</option>
+                <option value="it">🇮🇹 Italiana</option>
+                {/* <option value="fr">🇫🇷 Francais</option> */}
               </select>
 
               {/* SIDE NAVBAR */}

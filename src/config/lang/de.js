@@ -157,5 +157,7 @@ export const de = {
 		"Invalid private key": "Ungültiger Private-Key.",
 		"Switched explorer!": "Switched explorer!",
 		"Now using": "Now using {{name}}",
-
+		"Please ENCRYPT and/or BACKUP your keys before leaving, or you may lose them!": "Please ENCRYPT and/or BACKUP your keys before leaving, or you may lose them!",
+		"Dashboard ➜ Set Password": "Dashboard ➜ Set Password",
+		"Save your wallet!": "Save your wallet!",
 }
