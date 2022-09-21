@@ -48,7 +48,7 @@ const arrExplorers = [
   // Display name      Blockbook-compatible API base    
   { name: "zkBitcoin", url: "https://zkbitcoin.com" },
   { name: "rockdev", url: "https://explorer.rockdev.org" },
-  // { name: "testnet", url: "https://testnet.rockdev.org" }
+  { name: "testnet", url: "https://testnet.rockdev.org" }
 ]
 var cExplorer = arrExplorers[0];
 
@@ -90,6 +90,13 @@ function App(props) {
   function setExplorer(explorer) {
     setcExplorer(explorer)
     cExplorer = explorer;
+    createAlert(i18n, 'warning', 'Please ENCRYPT and/or BACKUP your keys before leaving, or you may lose them!', "", "", "", 3500);
+    localStorage.removeItem("encwif");
+    domGenKeyWarningRef.current.style.display = 'none';
+    domGuiWalletRef.current.style.display = 'none';
+    domGenerateWalletRef.current.style.display = 'block';
+    domGenVanityWalletRef.current.style.display = 'block';
+    domAccessWalletRef.current.style.display = 'block';
     enableNetwork();
     createAlert(i18n, 'success', 'Now using', "", "", "", 3500, "", "", "", explorer.name, "Switched explorer!");
   }
@@ -105,8 +112,8 @@ function App(props) {
 
   /* chainparams */
   const PUBKEY_PREFIX = cExplorerr.name === "testnet" ? "Y" : "D";
-  // const PUBKEY_ADDRESS = cExplorerr.name === "testnet" ? 30 : 139;
-  // const SECRET_KEY = cExplorerr.name === "testnet" ? 212 : 239;
+  const PUBKEY_ADDRESS = cExplorerr.name === "testnet" ? 139 : 30;
+  const SECRET_KEY = cExplorerr.name === "testnet" ? 239 : 212;
   const COIN = 1e8;
 
   /* Internal tweaking parameters */
@@ -299,7 +306,7 @@ function App(props) {
 
   function guiImportWallet() {
     if (hasEncryptedWallet()) {
-      decryptWallet(i18n, privateKeyRef.current.value).then(hasWallet => {
+      decryptWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, privateKeyRef.current.value).then(hasWallet => {
         if (hasWallet) {
           hideAllWalletOptions();
         } else {
@@ -309,7 +316,7 @@ function App(props) {
         domImportWalletRef.current.style.display = 'block';
       });
     } else {
-      importWallet(i18n);
+      importWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX);
     }
   }
 
@@ -396,7 +403,7 @@ function App(props) {
       function checkResult(data) {
         attempts++;
         if (data.pub.substr(0, nPrefixLen).toLowerCase() === nInsensitivePrefix) {
-          importWallet(data.priv, true);
+          importWallet(data.priv, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, true);
           stopSearch();
           domGuiBalanceRef.current.innerHTML = "0";
           domGuiBalanceBoxRef.current.style.fontSize = "x-large";
@@ -952,7 +959,7 @@ function App(props) {
                     </div>
 
 
-                    <button className="pivx-button-big" onClick={() => generateWallet(i18n)}>
+                    <button className="pivx-button-big" onClick={() => generateWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX)}>
                       <span className="buttoni-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 70"><path d="M3.497 25.717C1.401 25.588 0 23.847 0 21.753v-2.535c0-.775.149-1.593.925-1.593h22.719c2.173 0 3.941 1.861 3.941 4.034 0 2.174-1.769 3.988-3.941 3.988l-20.207.048c-.02 0 .08.023.06.022z"></path><path d="M5.229 69.625C4.455 69.625 4 68.494 4 67.719V38.661c0-1.911 1.447-3.731 3.258-3.989.175-.029.285-.047.483-.047h21.525c7.137 0 12.751-5.86 12.751-13.027 0-7.096-5.528-12.841-12.586-13.177-.002 0-.671.016-1.41.016l-20.335.066C5.529 8.373 4 6.652 4 4.558V2.023C4 1.247 4.407.625 5.183.625h24.059c11.57 0 20.654 9.546 20.706 21.104 0 9.378-6.307 17.727-15.337 20.311-1.622.445-3.122.705-4.735.778L12 42.842v22.485c0 2.156-2.141 4.298-4.235 4.298H5.229z"></path></svg></span>
                       <span className="buttoni-text">{i18n.t('create a new wallet')}</span>
                       <span className="buttoni-arrow"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M23.328 16.707L13.121 26.914a.5.5 0 01-.707 0l-2.828-2.828a.5.5 0 010-.707L16.964 16 9.586 8.621a.5.5 0 010-.707l2.828-2.828a.5.5 0 01.707 0l10.207 10.207a1 1 0 010 1.414z"></path></svg></span>

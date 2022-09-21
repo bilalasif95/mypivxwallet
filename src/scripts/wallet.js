@@ -78,8 +78,8 @@ var fWalletLoaded = false;
 var privateKeyForTransactions;
 var publicKeyForNetwork;
 var viewPrivKey;
-const SECRET_KEY = 212;
-const PUBKEY_ADDRESS = 30;
+// const SECRET_KEY = 212;
+// const PUBKEY_ADDRESS = 30;
 // const nSecp256k1 = nobleSecp256k1.default;
 // document.getElementById('dcfooter').innerHTML = '© MIT 2022 - Built with 💜 by PIVX Labs - <b style=\'cursor:pointer\' onclick=\'openDonatePage()\'>Donate!</b><br><a href="https://github.com/PIVX-Labs/MyPIVXWallet">MyPIVXWallet</a>';
 
@@ -92,7 +92,7 @@ const beforeUnloadListener = (evt, i18n) => {
 };
 
 // Wallet Import
-export function importWallet(i18n, newWif = false, raw = false) {
+export function importWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, newWif = false, raw = false) {
   const strImportConfirm = i18n.t("Do you really want to import a new address? If you haven't saved the last private key, the wallet will be LOST forever.");
   const walletConfirm = fWalletLoaded ? window.confirm(strImportConfirm) : true;
   if (walletConfirm) {
@@ -221,13 +221,13 @@ export function importWallet(i18n, newWif = false, raw = false) {
       getUTXOs(i18n);
 
     // Hide all wallet starter options
-    hideAllWalletOptions();
+    hideAllWalletOptions(PUBKEY_PREFIX);
   }
 }
 
-const PUBKEY_PREFIX = "D";
+// const PUBKEY_PREFIX = "D";
 
-function hideAllWalletOptions() {
+function hideAllWalletOptions(PUBKEY_PREFIX) {
   // Hide and Reset the Vanity address input
   domPrefixRef.current.value = PUBKEY_PREFIX;
   domPrefixRef.current.style.display = 'none';
@@ -261,7 +261,7 @@ function getSafeRand(nSize = 32) {
 }
 
 // Wallet Generation
-export async function generateWallet(i18n, noUI = false) {
+export async function generateWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, noUI = false) {
   const strImportConfirm = i18n.t("Do you really want to import a new address? If you haven't saved the last private key, the wallet will be LOST forever.");
   const walletConfirm = fWalletLoaded && !noUI ? window.confirm(strImportConfirm) : true;
   if (walletConfirm) {
@@ -382,7 +382,7 @@ export async function generateWallet(i18n, noUI = false) {
       // jdenticon();
       domGuiWalletRef.current.style.display = 'block';
       viewPrivKey = false;
-      hideAllWalletOptions();
+      hideAllWalletOptions(PUBKEY_PREFIX);
 
       // Refresh the balance UI (why? because it'll also display any 'get some funds!' alerts)
       getBalance(true);
@@ -418,7 +418,7 @@ export async function encryptWallet(i18n, strPassword = '') {
   window.removeEventListener("beforeunload", (evt) => { beforeUnloadListener(evt, i18n) }, { capture: true });
 }
 
-export async function decryptWallet(i18n, strPassword = '') {
+export async function decryptWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, strPassword = '') {
   // Check if there's any encrypted WIF available, if so, prompt to decrypt it
   let encWif = localStorage.getItem("encwif");
   if (!encWif || encWif.length < 1) {
@@ -431,7 +431,7 @@ export async function decryptWallet(i18n, strPassword = '') {
       alert("Incorrect password!");
     return false;
   }
-  importWallet(i18n, decWif);
+  importWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, decWif);
   return true;
 }
 
