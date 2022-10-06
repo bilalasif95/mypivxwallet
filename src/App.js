@@ -2,8 +2,8 @@ import './App.css';
 import { withTranslation } from 'react-i18next'
 import { createRef, useEffect, useState } from 'react';
 // import { debug, networkEnabled, toggleDebug, toggleNetwork } from "./scripts/settings";
-import { hasEncryptedWallet, decryptWallet, importWallet, generateWallet, encryptWallet } from "./scripts/wallet";
-import { calculatefee, sendTransaction, getBlockCount, getBalance, getStakingBalance, cachedUTXOs } from "./scripts/network";
+import { hasEncryptedWallet, decryptWallet, importWallet, generateWallet, encryptWallet, privateKeyForTransactions } from "./scripts/wallet";
+import { getFee, sendTransaction, getBlockCount, getBalance, getStakingBalance, cachedUTXOs, arrDelegatedUTXOs } from "./scripts/network";
 import { addcoldstakingoutput, addinput, serialize, addoutput, sign } from "./scripts/bitTrx";
 import { createAlert } from "./scripts/misc";
 // import { jdenticon } from "./scripts/libs/jdenticon.min";
@@ -42,21 +42,22 @@ const domAvailToDelegateRef = createRef();
 const domAvailToUndelegateRef = createRef();
 const domGuiBalanceBoxStakingRef = createRef();
 var networkEnabledVar = true;
+const domStakeTabRef = createRef();
 
 // A list of Labs-trusted explorers
 const arrExplorers = [
-  // Display name      Blockbook-compatible API base    
+  // Display name      Blockbook-compatible API base   
+  { name: "SWITCH to testnet", url: "https://testnet.rockdev.org" },
   { name: "zkBitcoin", url: "https://zkbitcoin.com" },
   { name: "rockdev", url: "https://explorer.rockdev.org" },
-  { name: "testnet", url: "https://testnet.rockdev.org" }
 ]
 var cExplorer = arrExplorers[0];
 
 function App(props) {
-  var privateKeyForTransactions;
-  var addresschange;
-  var totalSent;
-  var valuechange;
+  // var privateKeyForTransactions;
+  // var addresschange;
+  // var totalSent;
+  // var valuechange;
   const { i18n } = props;
   const [debug, setDebug] = useState(false);
   const [networkEnabled, setNetworkEnabled] = useState(true);
@@ -88,17 +89,23 @@ function App(props) {
   const [cExplorerr, setcExplorer] = useState(arrExplorers[0]);
 
   function setExplorer(explorer) {
-    setcExplorer(explorer)
-    cExplorer = explorer;
-    createAlert(i18n, 'warning', 'Please ENCRYPT and/or BACKUP your keys before leaving, or you may lose them!', "", "", "", 3500);
-    localStorage.removeItem("encwif");
-    domGenKeyWarningRef.current.style.display = 'none';
-    domGuiWalletRef.current.style.display = 'none';
-    domGenerateWalletRef.current.style.display = 'block';
-    domGenVanityWalletRef.current.style.display = 'block';
-    domAccessWalletRef.current.style.display = 'block';
-    enableNetwork();
-    createAlert(i18n, 'success', 'Now using', "", "", "", 3500, "", "", "", explorer.name, "Switched explorer!");
+    createAlert(i18n, 'warning', 'Please ENCRYPT and/or BACKUP your keys before leaving, or you may lose them!', "", "", "", 1000);
+    setTimeout(() => {
+      if (window.confirm('Are you sure you have backed up your keys?')) {
+        createAlert(i18n, 'success', 'Now using', "", "", "", 3500, "", "", "", explorer.name === "SWITCH to testnet" ? "testnet" : explorer.name, "Switched explorer!");
+        setcExplorer(explorer)
+        cExplorer = explorer;
+        localStorage.removeItem("encwif");
+        domGenKeyWarningRef.current.style.display = 'none';
+        domGuiWalletRef.current.style.display = 'none';
+        domGenerateWalletRef.current.style.display = 'block';
+        domGenVanityWalletRef.current.style.display = 'block';
+        domAccessWalletRef.current.style.display = 'block';
+        enableNetwork();
+      } else {
+        // Do nothing!
+      }
+    }, 100)
   }
 
   const onExplorerChange = (evt) => {
@@ -111,9 +118,9 @@ function App(props) {
   // These below params share the same names as the CPP params, so finding and editing these is easy-peasy!
 
   /* chainparams */
-  const PUBKEY_PREFIX = cExplorerr.name === "testnet" ? "Y" : "D";
-  const PUBKEY_ADDRESS = cExplorerr.name === "testnet" ? 139 : 30;
-  const SECRET_KEY = cExplorerr.name === "testnet" ? 239 : 212;
+  const PUBKEY_PREFIX = cExplorerr.name === "SWITCH to testnet" ? "Y" : "D";
+  const PUBKEY_ADDRESS = cExplorerr.name === "SWITCH to testnet" ? 139 : 30;
+  const SECRET_KEY = cExplorerr.name === "SWITCH to testnet" ? 239 : 212;
   const COIN = 1e8;
 
   /* Internal tweaking parameters */
@@ -125,7 +132,7 @@ function App(props) {
 
   // WALLET STATE DATA
   // let cachedUTXOs = [];
-  let arrDelegatedUTXOs = [];
+  // let arrDelegatedUTXOs = [];
   // let cachedBlockCount = 0;
   let cachedColdStakeAddr = "";
 
@@ -163,6 +170,10 @@ function App(props) {
 
   // const domAvailToDelegate = document.getElementById('availToDelegate');
   // const domAvailToUndelegate = document.getElementById('availToUndelegate');
+
+  // Aggregate menu screens and links for faster switching
+  const arrDomScreens = document.getElementsByClassName("tabcontent");
+  const arrDomScreenLinks = document.getElementsByClassName("tablinks");
 
   // function getBalance(updateGUI = false) {
   //   const nBalance = cachedUTXOs.reduce((a, b) => a + b.sats, 0);
@@ -209,48 +220,46 @@ function App(props) {
 
   let audio = null;
   function playMusic() {
-    if (audio === null)
-      audio = new Audio('assets/music.mp3');
+    // On first play: load the audio into memory from the host
+    if (audio === null) audio = new Audio('assets/music.mp3');
+    // Play or Pause
     if (audio.paused || audio.ended) {
-      startDisco();
+      audio.play();
+      for (const domImg of document.getElementsByTagName('img')) domImg.classList.add("discoFilter");
     } else {
-      stopDisco();
+      audio.pause();
+      for (const domImg of document.getElementsByTagName('img')) domImg.classList.remove("discoFilter");
     }
   }
 
-  function startDisco() {
-    audio.play();
-    for (const domImg of document.getElementsByTagName('img')) {
-      domImg.classList.add("discoFilter");
-    }
-  }
+  function toClipboard(source, caller) {
+    // Fetch the text/value source
+    const domCopy = document.getElementById(source);
 
-  function stopDisco() {
-    audio.pause();
-    for (const domImg of document.getElementsByTagName('img')) {
-      domImg.classList.remove("discoFilter");
-    }
-  }
+    // Use an invisible textbox as the clipboard source
+    const domClipboard = document.getElementById('clipboard');
+    domClipboard.value = domCopy.value || domCopy.innerHTML;
+    domClipboard.select();
+    domClipboard.setSelectionRange(0, 99999);
 
-  function toClipboard(element, caller) {
-    let nCopy = document.getElementById(element);
-    caller = document.getElementById(caller);
-    let nClipboard = document.getElementById('clipboard');
-    nClipboard.value = nCopy.value || nCopy.innerHTML;
-    nClipboard.select();
-    nClipboard.setSelectionRange(0, 99999);
+    // Browser-dependent clipboard execution
     if (!navigator.clipboard) {
       document.execCommand("copy");
     } else {
-      navigator.clipboard.writeText(nCopy.innerHTML);
+      navigator.clipboard.writeText(domCopy.innerHTML);
     }
 
-    caller.className += " fa-check";
-    caller.className = caller.className.replace(/ fa-clipboard/g, '');
+    // caller.className += " fa-check";
+    // caller.className = caller.className.replace(/ fa-clipboard/g, '');
+    // Display a temporary checkmark response
+    caller.classList.add("fa-check");
+    caller.classList.remove("fa-clipboard");
     caller.style.cursor = "default";
     setTimeout(() => {
-      caller.className += " fa-clipboard";
-      caller.className = caller.className.replace(/ fa-check/g, '');
+      // caller.className += " fa-clipboard";
+      // caller.className = caller.className.replace(/ fa-check/g, '');
+      caller.classList.add("fa-clipboard");
+      caller.classList.remove("fa-check");
       caller.style.cursor = "pointer";
     }, 1000);
   }
@@ -267,8 +276,9 @@ function App(props) {
   function toggleKeyView() {
     viewPrivKey = !viewPrivKey;
     guiViewKeyRef.current.innerHTML = viewPrivKey ? 'Privkey QR' : 'Pubkey QR';
-    domPrivateTxtRef.current.style.display = viewPrivKey ? 'block' : 'none';
-    domPrivateQrRef.current.style.display = viewPrivKey ? 'block' : 'none';
+    // domPrivateTxtRef.current.style.display = viewPrivKey ? 'block' : 'none';
+    // domPrivateQrRef.current.style.display = viewPrivKey ? 'block' : 'none';
+    domPrivateTxtRef.current.style.display = domPrivateQrRef.current.style.display = viewPrivKey ? 'block' : 'none';
     domPublicQrRef.current.style.display = !viewPrivKey ? 'block' : 'none';
   }
 
@@ -276,48 +286,64 @@ function App(props) {
     // Hide and Reset the Vanity address input
     setPrefix(PUBKEY_PREFIX);
     domPrefixRef.current.style.display = 'none';
-    // Hide 'generate wallet'
+    // Hide all "*Wallet" buttons
     domGenerateWalletRef.current.style.display = 'none';
-    // Hide 'import wallet'
     domImportWalletRef.current.style.display = 'none';
-    // Hide 'vanity wallet'
     domGenVanityWalletRef.current.style.display = 'none';
-    // Hide 'access wallet'
     domAccessWalletRef.current.style.display = 'none';
   }
 
-  function toggleWallet() {
-    var toggle = wToggleRef.current.innerHTML;
+  function accessOrImportWallet() {
+    // var toggle = wToggleRef.current.innerHTML;
     // Hide and Reset the Vanity address input
     setPrefix(PUBKEY_PREFIX);
     domPrefixRef.current.style.display = 'none';
-    if (toggle === i18n.t("Access My Wallet")) {
-      domImportWalletRef.current.style.display = 'block';
-      domAccessWalletBtnRef.current.style.display = 'none';
-      // We have a local wallet! Display the decryption prompt
-      if (hasEncryptedWallet()) {
-        privateKeyRef.current.placeholder = i18n.t('Enter your wallet password');
-        domImportWalletTextRef.current.innerText = i18n.t('Unlock Wallet');
-      }
-    } else {
-      domGenerateWalletRef.current.style.display = 'block';
+    // if (toggle === i18n.t("Access My Wallet")) {
+    //   domImportWalletRef.current.style.display = 'block';
+    //   domAccessWalletBtnRef.current.style.display = 'none';
+    //   // We have a local wallet! Display the decryption prompt
+    //   if (hasEncryptedWallet()) {
+    //     privateKeyRef.current.placeholder = i18n.t('Enter your wallet password');
+    //     domImportWalletTextRef.current.innerText = i18n.t('Unlock Wallet');
+    //   }
+    // } else {
+    //   domGenerateWalletRef.current.style.display = 'block';
+    // }
+    // Show Import button, hide access button
+    domImportWalletRef.current.style.display = 'block';
+    domAccessWalletBtnRef.current.style.display = 'none';
+
+    // If we have a local wallet, display the decryption prompt
+    if (hasEncryptedWallet()) {
+      privateKeyRef.current.placeholder = i18n.t('Enter your wallet password');
+      domImportWalletTextRef.current.innerText = i18n.t('Unlock Wallet');
+      privateKeyRef.current.focus();
     }
   }
 
-  function guiImportWallet() {
-    if (hasEncryptedWallet()) {
-      decryptWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, privateKeyRef.current.value).then(hasWallet => {
-        if (hasWallet) {
-          hideAllWalletOptions();
-        } else {
-          domGenerateWalletRef.current.style.display = 'block';
-        }
-      }).catch(e => {
-        domImportWalletRef.current.style.display = 'block';
-      });
-    } else {
-      importWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX);
-    }
+  async function guiImportWallet() {
+    // If we don't have a DB wallet: prompt an import
+    if (!hasEncryptedWallet()) return importWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX);
+
+    // Prompt for decryption of the existing wallet
+    const fHasWallet = await decryptWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, privateKeyRef.current.value);
+
+    // If the wallet was successfully loaded, hide all options and load the dash!
+    if (fHasWallet) hideAllWalletOptions();
+
+    // if (hasEncryptedWallet()) {
+    //   decryptWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, privateKeyRef.current.value).then(hasWallet => {
+    //     if (hasWallet) {
+    //       hideAllWalletOptions();
+    //     } else {
+    //       domGenerateWalletRef.current.style.display = 'block';
+    //     }
+    //   }).catch(e => {
+    //     domImportWalletRef.current.style.display = 'block';
+    //   });
+    // } else {
+    //   importWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX);
+    // }
   }
 
   function guiEncryptWallet() {
@@ -372,6 +398,7 @@ function App(props) {
       domGenKeyWarningRef.current.style.display = 'none';
       domPrivateTxtRef.current.innerHTML = "~";
       domGuiAddressRef.current.innerHTML = "~";
+      domPrefixRef.current.focus();
     } else {
       // Ensure the input is base58 compatible
       for (const char of prefix) {
@@ -427,71 +454,158 @@ function App(props) {
   // }
   function undelegateGUI() {
     // Verify the amount
-    const nAmount = Number(document.getElementById('undelegateAmount').value);
-    if (nAmount < 0.01) return createAlert(i18n, 'warning', 'Minimum_amount', "", "", "", 2000);
+    const nAmount = Math.round(Number(document.getElementById('undelegateAmount').value.trim()) * COIN);
+    if (nAmount < 0.01 * COIN || isNaN(nAmount)) return createAlert(i18n, 'warning', 'Minimum_amount', 'Invalid amount!', '', '', 2500);
+    if (!Number.isSafeInteger(nAmount)) return createAlert(i18n, 'warning', '8 decimal limit exceeded', 'Invalid amount!', '', '', 2500);
     undelegate(nAmount);
   }
-  function undelegate(value) {
-    if (!domGuiAddressRef.current.innerHTML) {
-      if (hasEncryptedWallet())
-        createAlert(i18n, 'warning', "Please unlock your wallet before sending transactions!", "", "", "", 3000);
-      else
-        createAlert(i18n, 'warning', "Please import/create your wallet before sending transactions!", "", "", "", 3250);
-      return;
-    }
 
-    let nBalance = getStakingBalance() / COIN;
-    if (value > nBalance) return alert(`${i18n.t('Balance is too small!')} (${nBalance} - ${value} = ${(nBalance - value).toFixed(8)})`);
-    console.log("Constructing TX of value: " + value + " PIV");
-    // Loop our cached UTXOs and construct a TX
-    // const cTx = bitjs.transaction();
-    let txValue = 0;
-    for (const UTXO of arrDelegatedUTXOs) {
-      if (txValue > value) {
+  // Coin Control response formats
+  function ccError(msg = '') { return { success: false, msg } };
+  function ccSuccess(data) { return { success: true, ...data } };
+
+  function chooseUTXOs(nTotalSatsRequired = 0, nMinInputSize = 0, fColdOnly = false) {
+    console.log("Constructing TX of value: " + (nTotalSatsRequired / COIN) + " PIV");
+
+    // Select the UTXO type bucket
+    const arrUTXOs = fColdOnly ? arrDelegatedUTXOs : cachedUTXOs;
+
+    // Select and return UTXO pointers (filters applied)
+    const cCoinControl = { nValue: 0, nChange: 0, arrSelectedUTXOs: [] }
+    for (const cUTXO of arrUTXOs) {
+      // Have we met the required sats threshold?
+      if (cCoinControl.nValue >= nTotalSatsRequired) {
         // Required Coin Control value met, yahoo!
-        // console.log("Coin Control: TX Constructed! Selected " + cTx.inputs.length + " input(s) (" + txValue + " PIV)");
-        console.log("Coin Control: TX Constructed! Selected input(s) (" + txValue + " PIV)");
+        console.log("Coin Control: TX Constructed! Selected " + cCoinControl.arrSelectedUTXOs.length + " input(s) (" + (cCoinControl.nValue / COIN) + " PIV)");
         break;
       }
-      addinput(UTXO.id, UTXO.vout, UTXO.script);
-      txValue += UTXO.sats / COIN;
-      console.log("Coin Control: Selected CS input " + UTXO.id.substr(0, 6) + "(" + UTXO.vout + ")... (Added " + (UTXO.sats / COIN).toFixed(8) + " PIV - Total: " + txValue + ")");
-    }
-    const nFee = calculatefee(serialize().length);
-    addoutput(domGuiAddressRef.current.innerHTML, value);
-    addresschange = domGuiAddressRef.current.innerHTML;
-    totalSent = (nFee + value).toFixed(8);
-    valuechange = (txValue - parseFloat(totalSent)).toFixed(8);
-    if (totalSent <= nBalance) {
-      if (debug)
-        domHumanReadable.innerHTML = "Balance: " + nBalance.toFixed(8) + "<br>Fee: " + nFee + "<br>To: " + domGuiAddressRef.current.innerHTML + "<br>Sent: " + value + "<br>Change Address: " + addresschange + "<br>Change: " + valuechange;
-      if (valuechange > 1.01) {
-        // Enough change to resume cold staking, so we'll send the change back to the cold staking address
-        // Ensure the user has an address set - if not, request one!
-        if (!askForCSAddr()) return;
-        // Sanity
-        if (cachedColdStakeAddr.length !== 34 || !cachedColdStakeAddr.startsWith('S')) {
-          askForCSAddr(true);
-          return createAlert(i18n, 'success', 'undelegate_alert', "Staking Address set!");
-        }
-        addcoldstakingoutput(domGuiAddressRef.current.innerHTML, cachedColdStakeAddr, valuechange);
-        console.log('Re-delegated delegation spend change!');
-      } else {
-        // Not enough change to cold stake, so we'll just unstake everything
-        addoutput(addresschange, valuechange);
-        console.log('Spent all CS dust into redeem address!');
-      }
-      sendTransaction(i18n, sign(privateKeyForTransactions, 1, 'coldstake'), "<b>Delegation successfully spent!</b><br>Please wait for confirmations.");
-      domGenIt.innerHTML = "Continue";
+      // Does the UTXO meet size requirements?
+      if (cUTXO.sats < nMinInputSize) continue;
+
+      // Push UTXO and cache new total value
+      cCoinControl.arrSelectedUTXOs.push(cUTXO);
+      cCoinControl.nValue += cUTXO.sats;
+      console.log("Coin Control: Selected input " + cUTXO.id.substr(0, 6) + "(" + cUTXO.vout + ")... (Added " + (cUTXO.sats / COIN) + " PIV - Total: " + (cCoinControl.nValue / COIN) + ")");
+    };
+
+    // If we don't have enough value: leave the cTx alone and return false
+    if (cCoinControl.nValue < nTotalSatsRequired) return ccError("Balance is too small! (Missing " + (cCoinControl.nValue - nTotalSatsRequired).toLocaleString('en-gb') + " sats)");
+
+    // Reaching here: we have sufficient UTXOs, stuff them into the TX, calc final misc data and return!
+    for (const cUTXO of cCoinControl.arrSelectedUTXOs) addinput(cUTXO.id, cUTXO.vout, cUTXO.script);
+    cCoinControl.nChange = nTotalSatsRequired - cCoinControl.nValue;
+    return ccSuccess(cCoinControl);
+  }
+
+  function hasWalletUnlocked(fIncludeNetwork = false) {
+    if (fIncludeNetwork && !networkEnabled)
+      return createAlert(i18n, 'warning', "Please disable Offline Mode for automatic transactions", "Offline Mode is active!", "", "", 5500);
+    if (domGuiAddressRef.current.innerHTML === "~") {
+      if (hasEncryptedWallet())
+        createAlert(i18n, 'warning', "Please unlock your wallet before sending transactions!", "", "", "", 3500);
+      else
+        createAlert(i18n, 'warning', "Please import/create your wallet before sending transactions!", "", "", "", 3500);
+      return false;
     } else {
-      console.warn("Amount: " + value + "\nFee: " + nFee + "\nChange: " + valuechange + "\nTOTAL: " + totalSent);
-      alert(i18n.t('You are trying to undelegate more than you have, don\'t forget blockchain fees! Removing ~0.001 PIV will do fine.'));
+      return true;
     }
+  }
+
+  function undelegate(nValue) {
+    if (!hasWalletUnlocked(true)) return;
+    // if (!domGuiAddressRef.current.innerHTML) {
+    //   if (hasEncryptedWallet())
+    //     createAlert(i18n, 'warning', "Please unlock your wallet before sending transactions!", "", "", "", 3000);
+    //   else
+    //     createAlert(i18n, 'warning', "Please import/create your wallet before sending transactions!", "", "", "", 3250);
+    //   return;
+    // }
+
+    let nBalance = getStakingBalance();
+    // if (value > nBalance) return alert(`${i18n.t('Balance is too small!')} (${nBalance} - ${value} = ${(nBalance - value).toFixed(8)})`);
+    // console.log("Constructing TX of value: " + value + " PIV");
+    // Loop our cached UTXOs and construct a TX
+    // const cTx = bitjs.transaction();
+    // let txValue = 0;
+    // for (const UTXO of arrDelegatedUTXOs) {
+    //   if (txValue > value) {
+    //     // Required Coin Control value met, yahoo!
+    //     // console.log("Coin Control: TX Constructed! Selected " + cTx.inputs.length + " input(s) (" + txValue + " PIV)");
+    //     console.log("Coin Control: TX Constructed! Selected input(s) (" + txValue + " PIV)");
+    //     break;
+    //   }
+    //   addinput(UTXO.id, UTXO.vout, UTXO.script);
+    //   txValue += UTXO.sats / COIN;
+    //   console.log("Coin Control: Selected CS input " + UTXO.id.substr(0, 6) + "(" + UTXO.vout + ")... (Added " + (UTXO.sats / COIN).toFixed(8) + " PIV - Total: " + txValue + ")");
+    // }
+    // Construct a TX and fetch Cold inputs
+    const cCoinControl = chooseUTXOs(nValue, 0, true);
+    if (!cCoinControl.success) return alert(cCoinControl.msg);
+
+    // Compute fee
+    // const nFee = getFee(serialize().length);
+    // // The primary Cold-to-Public output
+    // addoutput(domGuiAddressRef.current.innerHTML, value);
+    // // addresschange = domGuiAddressRef.current.innerHTML;
+    // totalSent = (nFee + value).toFixed(8);
+    // valuechange = ((cCoinControl.nValue / COIN) - parseFloat(totalSent)).toFixed(8);
+    // if (totalSent <= nBalance) {
+    //   if (debug)
+    //     domHumanReadable.innerHTML = "Balance: " + nBalance.toFixed(8) + "<br>Fee: " + nFee + "<br>To: " + domGuiAddressRef.current.innerHTML + "<br>Sent: " + value + "<br>Change Address: " + addresschange + "<br>Change: " + valuechange;
+    //   if (valuechange > 1.01) {
+    //     // Enough change to resume cold staking, so we'll send the change back to the cold staking address
+    //     // Ensure the user has an address set - if not, request one!
+    //     if (!askForCSAddr()) return;
+    //     // Sanity
+    //     if (cachedColdStakeAddr.length !== 34 || !cachedColdStakeAddr.startsWith('S')) {
+    //       askForCSAddr(true);
+    //       return createAlert(i18n, 'success', 'undelegate_alert', "Staking Address set!");
+    //     }
+    //     addcoldstakingoutput(domGuiAddressRef.current.innerHTML, cachedColdStakeAddr, valuechange);
+    //     console.log('Re-delegated delegation spend change!');
+    //   } else {
+    //     // Not enough change to cold stake, so we'll just unstake everything
+    //     addoutput(domGuiAddressRef.current.innerHTML, valuechange);
+    //     console.log('Spent all CS dust into redeem address!');
+    // Compute fee and change (or lack thereof)
+    const nFee = getFee(serialize().length);
+    const nChange = cCoinControl.nValue - (nFee + nValue);
+    if (nChange > 1.01 * COIN) {
+      // Enough change to resume cold staking, so we'll re-delegate change to the cold staking address
+      // Ensure the user has an address set - if not, request one!
+      if (!askForCSAddr()) return;
+
+      // Sanity
+      if (cachedColdStakeAddr.length !== 34 || !cachedColdStakeAddr.startsWith('S')) {
+        askForCSAddr(true);
+        return createAlert(i18n, 'success', 'undelegate_alert', "Staking Address set!");
+      }
+      // sendTransaction(i18n, sign(privateKeyForTransactions, 1, 'coldstake'), "<b>Delegation successfully spent!</b><br>Please wait for confirmations.");
+      // domGenIt.innerHTML = "Continue";
+      // The re-delegated change output
+      addcoldstakingoutput(domGuiAddressRef.current.innerHTML, cachedColdStakeAddr, nChange / COIN);
+      console.log('Re-delegated delegation spend change!');
+    } else {
+      // console.warn("Amount: " + value + "\nFee: " + nFee + "\nChange: " + valuechange + "\nTOTAL: " + totalSent);
+      // alert(i18n.t('You are trying to undelegate more than you have, don\'t forget blockchain fees! Removing ~0.001 PIV will do fine.'));
+      // Not enough change to cold stake, so we'll just unstake everything
+      addoutput(domGuiAddressRef.current.innerHTML, nChange / COIN);
+      console.log('Spent all CS dust into redeem address!');
+    }
+    // The primary Cold-to-Public output
+    addoutput(domGuiAddressRef.current.innerHTML, nValue / COIN);
+
+    // Debug-only verbose response
+    if (debug) domHumanReadable.innerHTML = "Balance: " + (nBalance / COIN) + "<br>Fee: " + (nFee / COIN) + "<br>To: " + domGuiAddressRef.current.innerHTML + "<br>Sent: " + (nValue / COIN) + (nChange > 0 ? "<br>Change Address: " + domGuiAddressRef.current.innerHTML + "<br>Change: " + (nChange / COIN) : "");
+
+    // Sign and broadcast!
+    sendTransaction(i18n, sign(privateKeyForTransactions, 1, 'coldstake'), "<b>Delegation successfully spent!</b><br>Please wait for confirmations.");
+    domGenIt.innerHTML = "Continue";
   }
   function askForCSAddr(force = false) {
     if (force) cachedColdStakeAddr = null;
     if (cachedColdStakeAddr === "" || cachedColdStakeAddr === null) {
-      cachedColdStakeAddr = prompt(i18n.t('cold_address'));
+      cachedColdStakeAddr = prompt(i18n.t('cold_address')).trim();
       if (cachedColdStakeAddr) return true;
     } else {
       return true;
@@ -500,8 +614,9 @@ function App(props) {
   }
   function delegateGUI() {
     // Verify the amount
-    const nAmount = Number(document.getElementById('delegateAmount').value);
-    if (nAmount < 1) return createAlert(i18n, 'warning', 'minimum_staking', "", "", "", 2000);
+    const nAmount = Math.round(Number(document.getElementById('delegateAmount').value.trim()) * COIN);
+    if (nAmount < COIN || isNaN(nAmount)) return createAlert(i18n, 'warning', 'Minimum_amount', 'Invalid amount!', '', '', 2500);
+    if (!Number.isSafeInteger(nAmount)) return createAlert(i18n, 'warning', '8 decimal limit exceeded', 'Invalid amount!', '', '', 2500);
 
     // Ensure the user has an address set - if not, request one!
     if (!askForCSAddr()) return;
@@ -513,101 +628,151 @@ function App(props) {
     }
     delegate(nAmount, cachedColdStakeAddr);
   }
-  function delegate(value, coldAddr) {
-    if (!domGuiAddressRef.current.innerHTML) {
-      if (hasEncryptedWallet())
-        alert(i18n.t("Please unlock your wallet before sending transactions!"));
-      else
-        alert(i18n.t("Please import/create your wallet before sending transactions!"));
-      return;
-    }
-    let nBalance = getBalance() / COIN;
-    if (value > nBalance) return alert(`${i18n.t('Balance is too small!')} (${nBalance} - ${value} = ${(nBalance - value).toFixed(8)})`);
-    console.log("Constructing TX of value: " + value + " PIV");
+  function delegate(nValue, coldAddr) {
+    // if (!domGuiAddressRef.current.innerHTML) {
+    //   if (hasEncryptedWallet())
+    //     alert(i18n.t("Please unlock your wallet before sending transactions!"));
+    //   else
+    //     alert(i18n.t("Please import/create your wallet before sending transactions!"));
+    //   return;
+    // }
+    if (!hasWalletUnlocked(true)) return;
+    let nBalance = getBalance();
+    // if (value > nBalance) return alert(`${i18n.t('Balance is too small!')} (${nBalance} - ${value} = ${(nBalance - value).toFixed(8)})`);
+    // console.log("Constructing TX of value: " + value + " PIV");
     // Loop our cached UTXOs and construct a TX
     // const cTx = bitjs.transaction();
-    let txValue = 0;
-    for (const UTXO of cachedUTXOs) {
-      if (txValue > value) {
-        // Required Coin Control value met, yahoo!
-        // console.log("Coin Control: TX Constructed! Selected " + cTx.inputs.length + " input(s) (" + txValue + " PIV)");
-        console.log("Coin Control: TX Constructed! Selected input(s) (" + txValue + " PIV)");
-        break;
-      }
-      addinput(UTXO.id, UTXO.vout, UTXO.script);
-      txValue += UTXO.sats / COIN;
-      console.log("Coin Control: Selected input " + UTXO.id.substr(0, 6) + "(" + UTXO.vout + ")... (Added " + (UTXO.sats / COIN).toFixed(8) + " PIV - Total: " + txValue + ")");
-    }
-    const nFee = calculatefee(serialize().length);
-    addcoldstakingoutput(domGuiAddressRef.current.innerHTML, coldAddr, value);
-    addresschange = domGuiAddressRef.current.innerHTML;
-    totalSent = (nFee + parseFloat(value)).toFixed(8);
-    valuechange = (txValue - parseFloat(totalSent)).toFixed(8);
-    if (totalSent <= nBalance) {
-      if (debug)
-        domHumanReadable.innerHTML = "Balance: " + nBalance.toFixed(8) + "<br>Fee: " + nFee + "<br>To: " + domGuiAddressRef.current.innerHTML + "<br>Sent: " + value + "<br>Change Address: " + addresschange + "<br>Change: " + valuechange;
-      addoutput(addresschange, valuechange); //Change Address
-      sendTransaction(i18n, sign(privateKeyForTransactions, 1), "Please wait for confirmations, enjoy your staking!", "Delegation successful!");
-      domGenIt.innerHTML = "Continue";
+    // let txValue = 0;
+    // for (const UTXO of cachedUTXOs) {
+    //   if (txValue > value) {
+    //     // Required Coin Control value met, yahoo!
+    //     // console.log("Coin Control: TX Constructed! Selected " + cTx.inputs.length + " input(s) (" + txValue + " PIV)");
+    //     console.log("Coin Control: TX Constructed! Selected input(s) (" + txValue + " PIV)");
+    //     break;
+    //   }
+    //   addinput(UTXO.id, UTXO.vout, UTXO.script);
+    //   txValue += UTXO.sats / COIN;
+    //   console.log("Coin Control: Selected input " + UTXO.id.substr(0, 6) + "(" + UTXO.vout + ")... (Added " + (UTXO.sats / COIN).toFixed(8) + " PIV - Total: " + txValue + ")");
+    // }
+    // Construct a TX and fetch Standard inputs
+    const cCoinControl = chooseUTXOs(nValue, 0, false);
+    if (!cCoinControl.success) return alert(cCoinControl.msg);
+
+    // Compute fee
+    // const nFee = getFee(serialize().length);
+    // // The primary Standard-to-Cold output
+    // addcoldstakingoutput(domGuiAddressRef.current.innerHTML, coldAddr, value);
+    // // addresschange = domGuiAddressRef.current.innerHTML;
+    // totalSent = (nFee + parseFloat(value)).toFixed(8);
+    // valuechange = ((cCoinControl.nValue / COIN) - parseFloat(totalSent)).toFixed(8);
+    // if (totalSent <= nBalance) {
+    //   if (debug)
+    //     domHumanReadable.innerHTML = "Balance: " + nBalance.toFixed(8) + "<br>Fee: " + nFee + "<br>To: " + domGuiAddressRef.current.innerHTML + "<br>Sent: " + value + "<br>Change Address: " + addresschange + "<br>Change: " + valuechange;
+    //   addoutput(domGuiAddressRef.current.innerHTML, valuechange); //Change Address
+    //   sendTransaction(i18n, sign(privateKeyForTransactions, 1), "Please wait for confirmations, enjoy your staking!", "Delegation successful!");
+    //   domGenIt.innerHTML = "Continue";
+    // Compute fee and change (or lack thereof)
+    const nFee = getFee(serialize().length);
+    const nChange = cCoinControl.nValue - (nFee + nValue);
+    if (nChange > 0) {
+      // Change output
+      addoutput(domGuiAddressRef.current.innerHTML, nChange / COIN);
     } else {
-      console.warn("Amount: " + value + "\nFee: " + nFee + "\nChange: " + valuechange + "\nTOTAL: " + totalSent);
-      alert(i18n.t('undelegate_alert2'));
+      // console.warn("Amount: " + value + "\nFee: " + nFee + "\nChange: " + valuechange + "\nTOTAL: " + totalSent);
+      // alert(i18n.t('undelegate_alert2'));
+      // We're sending alot! So we deduct the fee from the send amount. There's not enough change to pay it with!
+      nValue -= nFee;
     }
+    // The primary Standard-to-Cold output
+    addcoldstakingoutput(domGuiAddressRef.current.innerHTML, coldAddr, nValue / COIN);
+
+    // Debug-only verbose response
+    if (debug) domHumanReadable.innerHTML = "Balance: " + (nBalance / COIN) + "<br>Fee: " + (nFee / COIN) + "<br>To: " + domGuiAddressRef.current.innerHTML + "<br>Sent: " + (nValue / COIN) + (nChange > 0 ? "<br>Change Address: " + domGuiAddressRef.current.innerHTML + "<br>Change: " + (nChange / COIN) : "");
+
+    // Sign and broadcast!
+    sendTransaction(sign(privateKeyForTransactions, 1), "<b>Delegation successful!</b><br>Please wait for confirmations, enjoy your staking!");
+    domGenIt.innerHTML = "Continue";
   }
 
-  // function preimage(value, hex) {
-  //   if (!domGuiAddressRef.current.innerHTML) {
-  //     if (hasEncryptedWallet())
-  //       alert(i18n.t("Please unlock your wallet before sending transactions!"));
-  //     else
-  //       alert(i18n.t("Please import/create your wallet before sending transactions!"));
-  //     return;
-  //   }
-  //   let nBalance = getBalance() / COIN;
-  //   if (value > nBalance) return alert(`${i18n.t('Balance is too small!')} (${nBalance} - ${value} = ${(nBalance - value).toFixed(8)})`);
-  //   console.log("Constructing TX of value: " + value + " PIV");
+  // function preimage(nValue, hex) {
+  //   // if (!domGuiAddressRef.current.innerHTML) {
+  //   //   if (hasEncryptedWallet())
+  //   //     alert(i18n.t("Please unlock your wallet before sending transactions!"));
+  //   //   else
+  //   //     alert(i18n.t("Please import/create your wallet before sending transactions!"));
+  //   //   return;
+  //   // }
+  //   if (!hasWalletUnlocked(true)) return;
+  //   let nBalance = getBalance();
+  //   // if (value > nBalance) return alert(`${i18n.t('Balance is too small!')} (${nBalance} - ${value} = ${(nBalance - value).toFixed(8)})`);
+  //   // console.log("Constructing TX of value: " + value + " PIV");
   //   // Loop our cached UTXOs and construct a TX
   //   // const cTx = bitjs.transaction();
-  //   let txValue = 0;
-  //   for (const UTXO of cachedUTXOs) {
-  //     if (txValue > value) {
-  //       // Required Coin Control value met, yahoo!
-  //       // console.log("Coin Control: TX Constructed! Selected " + cTx.inputs.length + " input(s) (" + txValue + " PIV)");
-  //       console.log("Coin Control: TX Constructed! Selected input(s) (" + txValue + " PIV)");
-  //       break;
-  //     }
-  //     addinput(UTXO.id, UTXO.vout, UTXO.script);
-  //     txValue += UTXO.sats / COIN;
-  //     console.log("Coin Control: Selected input " + UTXO.id.substr(0, 6) + "(" + UTXO.vout + ")... (Added " + (UTXO.sats / COIN).toFixed(8) + " PIV - Total: " + txValue + ")");
-  //   }
-  //   const nFee = calculatefee(serialize().length);
-  //   addpreimageoutput(hex, value);
-  //   addresschange = domGuiAddressRef.current.innerHTML;
-  //   totalSent = (nFee + parseFloat(value)).toFixed(8);
-  //   valuechange = (txValue - parseFloat(totalSent)).toFixed(8);
-  //   if (totalSent <= nBalance) {
-  //     if (debug)
-  //       domHumanReadable.innerHTML = "Balance: " + nBalance.toFixed(8) + "<br>Fee: " + nFee + "<br>To: " + domGuiAddressRef.current.innerHTML + "<br>Sent: " + value + "<br>Change Address: " + addresschange + "<br>Change: " + valuechange;
-  //     addoutput(addresschange, valuechange); //Change Address
-  //     sendTransaction(i18n, sign(privateKeyForTransactions, 1));
-  //     domGenIt.innerHTML = "Continue";
+  //   // let txValue = 0;
+  //   // for (const UTXO of cachedUTXOs) {
+  //   //   if (txValue > value) {
+  //   //     // Required Coin Control value met, yahoo!
+  //   //     // console.log("Coin Control: TX Constructed! Selected " + cTx.inputs.length + " input(s) (" + txValue + " PIV)");
+  //   //     console.log("Coin Control: TX Constructed! Selected input(s) (" + txValue + " PIV)");
+  //   //     break;
+  //   //   }
+  //   //   addinput(UTXO.id, UTXO.vout, UTXO.script);
+  //   //   txValue += UTXO.sats / COIN;
+  //   //   console.log("Coin Control: Selected input " + UTXO.id.substr(0, 6) + "(" + UTXO.vout + ")... (Added " + (UTXO.sats / COIN).toFixed(8) + " PIV - Total: " + txValue + ")");
+  //   // }
+  //   // Construct a TX and fetch Standard inputs
+  //   const cCoinControl = chooseUTXOs(cTx, nValue, 0, false);
+  //   if (!cCoinControl.success) return alert(cCoinControl.msg);
+
+  //   // Compute fee
+  //   // const nFee = getFee(serialize().length);
+  //   // // The primary output
+  //   // addpreimageoutput(hex, value);
+  //   // // addresschange = domGuiAddressRef.current.innerHTML;
+  //   // totalSent = (nFee + parseFloat(value)).toFixed(8);
+  //   // valuechange = ((cCoinControl.nValue / COIN) - parseFloat(totalSent)).toFixed(8);
+  //   // if (totalSent <= nBalance) {
+  //   //   if (debug)
+  //   //     domHumanReadable.innerHTML = "Balance: " + nBalance.toFixed(8) + "<br>Fee: " + nFee + "<br>To: " + domGuiAddressRef.current.innerHTML + "<br>Sent: " + value + "<br>Change Address: " + addresschange + "<br>Change: " + valuechange;
+  //   //   addoutput(domGuiAddressRef.current.innerHTML, valuechange); //Change Address
+  //   //   sendTransaction(i18n, sign(privateKeyForTransactions, 1));
+  //   //   domGenIt.innerHTML = "Continue";
+  //   // Compute fee and change (or lack thereof)
+  //   const nFee = getFee(serialize().length);
+  //   const nChange = cCoinControl.nValue - (nFee + nValue);
+  //   if (nChange > 0) {
+  //     // Change output
+  //     addoutput(domGuiAddressRef.current.innerHTML, nChange / COIN);
   //   } else {
-  //     console.warn("Amount: " + value + "\nFee: " + nFee + "\nChange: " + valuechange + "\nTOTAL: " + totalSent);
-  //     createAlert(i18n, 'warning', 'You are trying to send more than you have!', "", "", "", 2500);
+  //     // console.warn("Amount: " + value + "\nFee: " + nFee + "\nChange: " + valuechange + "\nTOTAL: " + totalSent);
+  //     // createAlert(i18n, 'warning', 'You are trying to send more than you have!', "", "", "", 2500);
+  //     // We're sending alot! So we deduct the fee from the send amount. There's not enough change to pay it with!
+  //     nValue -= nFee;
   //   }
+  //   // The primary output
+  //   addpreimageoutput(hex, nValue / COIN);
+
+  //   // Debug-only verbose response
+  //   if (debug) domHumanReadable.innerHTML = "Balance: " + (nBalance / COIN) + "<br>Fee: " + (nFee / COIN) + "<br>To: " + domGuiAddressRef.current.innerHTML + "<br>Sent: " + (nValue / COIN) + (nChange > 0 ? "<br>Change Address: " + domGuiAddressRef.current.innerHTML + "<br>Change: " + (nChange / COIN) : "");
+
+  //   // Sign and broadcast!
+  //   sendTransaction(sign(privateKeyForTransactions, 1));
+  //   domGenIt.innerHTML = "Continue";
   // }
 
-  function createSimpleTransation() {
-    if (!networkEnabled) return alert(i18n.t("offline_send"));
-    if (!domGuiAddressRef.current.innerHTML) {
-      if (hasEncryptedWallet())
-        createAlert(i18n, 'warning', "Please unlock your wallet before sending transactions!", "", "", "", 2500);
-      else
-        createAlert(i18n, 'warning', "Please import/create your wallet before sending transactions!", "", "", "", 2500);
-      return;
-    }
-    const address = domAddress1s.value;
-    let value = Number(domValue1s.value);
+  function createTxGUI() {
+    // if (!networkEnabled) return alert(i18n.t("offline_send"));
+    // if (!domGuiAddressRef.current.innerHTML) {
+    //   if (hasEncryptedWallet())
+    //     createAlert(i18n, 'warning', "Please unlock your wallet before sending transactions!", "", "", "", 2500);
+    //   else
+    //     createAlert(i18n, 'warning', "Please import/create your wallet before sending transactions!", "", "", "", 2500);
+    //   return;
+    // }
+    if (!hasWalletUnlocked(true)) return;
+    // const address = domAddress1s.value;
+    // let value = Number(domValue1s.value);
+    // Clear the inputs on 'Continue'
     if (domGenIt.innerHTML === 'Continue') {
       domGenIt.innerHTML = 'Send Transaction';
       domTxOutput.innerHTML = '';
@@ -618,81 +783,139 @@ function App(props) {
       domReqDisplay.style.display = 'none';
       return;
     }
-    let nBalance = getBalance() / COIN;
-    if (value > nBalance) return alert(`${i18n.t('Balance is too small!')} (${nBalance} - ${value} = ${(nBalance - value).toFixed(8)})`);
-    console.log("Constructing TX of value: " + value + " PIV");
+    // let nBalance = getBalance() / COIN;
+    // Sanity check the address
+    const address = domAddress1s.value.trim();
+    // If Staking address: redirect to staking page
+    if (address.startsWith("S")) {
+      createAlert(i18n, 'warning', 'Here, use the Stake screen, not the Send screen!', '', '', '', 7500);
+      return domStakeTabRef.current.click();
+    }
+    if (address.length !== 34) return createAlert(i18n, "warning", "Bad length", "", "", "", 2500, "", "", "", address.length.toString(), "Invalid PIVX address!");
+    if (!address.startsWith(PUBKEY_PREFIX)) return createAlert(i18n, 'warning', 'Bad prefix', "", "", "", 3500, "", "", "", "", 'Invalid PIVX address!', address[0], PUBKEY_PREFIX, 'Should start with');
+
+    // Sanity check the amount
+    let nValue = Math.round(Number(domValue1s.value.trim()) * COIN);
+    if (nValue <= 0 || isNaN(nValue)) return createAlert(i18n, 'warning', "You can't send nothing!", 'Invalid amount!', "", "", 2500);
+    if (!Number.isSafeInteger(nValue)) return createAlert(i18n, 'warning', '8 decimal limit exceeded', 'Invalid amount!', "", "", 2500);
+    // if (value > nBalance) return alert(`${i18n.t('Balance is too small!')} (${nBalance} - ${value} = ${(nBalance - value).toFixed(8)})`);
+    // console.log("Constructing TX of value: " + value + " PIV");
     // Loop our cached UTXOs and construct a TX
     // const cTx = bitjs.transaction();
-    let txValue = 0;
-    for (const UTXO of cachedUTXOs) {
-      if (txValue >= value) {
-        // Required Coin Control value met, yahoo!
-        // console.log("Coin Control: TX Constructed! Selected " + cTx.inputs.length + " input(s) (" + txValue + " PIV)");
-        console.log("Coin Control: TX Constructed! Selected input(s) (" + txValue + " PIV)");
-        break;
-      }
-      addinput(UTXO.id, UTXO.vout, UTXO.script);
-      txValue += UTXO.sats / COIN;
-      console.log("Coin Control: Selected input " + UTXO.id.substr(0, 6) + "(" + UTXO.vout + ")... (Added " + (UTXO.sats / COIN).toFixed(8) + " PIV - Total: " + txValue + ")");
-    }
+    // let txValue = 0;
+    // for (const UTXO of cachedUTXOs) {
+    //   if (txValue >= value) {
+    //     // Required Coin Control value met, yahoo!
+    //     // console.log("Coin Control: TX Constructed! Selected " + cTx.inputs.length + " input(s) (" + txValue + " PIV)");
+    //     console.log("Coin Control: TX Constructed! Selected input(s) (" + txValue + " PIV)");
+    //     break;
+    //   }
+    //   addinput(UTXO.id, UTXO.vout, UTXO.script);
+    //   txValue += UTXO.sats / COIN;
+    //   console.log("Coin Control: Selected input " + UTXO.id.substr(0, 6) + "(" + UTXO.vout + ")... (Added " + (UTXO.sats / COIN).toFixed(8) + " PIV - Total: " + txValue + ")");
+    // }
+    // Construct a TX and fetch Standard inputs
+    const nBalance = getBalance();
+    const cCoinControl = chooseUTXOs(nValue, 0, false);
+    if (!cCoinControl.success) return alert(cCoinControl.msg);
 
-    const nFee = calculatefee(serialize().length);
-    const fNoChange = value >= (nBalance - nFee);
-    if (fNoChange) {
-      // We're sending alot! So we've got to deduct the fee from the send amount. There's not enough change to pay it with!
-      value = Number((value - nFee).toFixed(8));
-    }
+    // Compute fee
+    const nFee = getFee(serialize().length);
+    // Compute change (or lack thereof)
+    // const fNoChange = nValue >= (nBalance - nFee);
+    // let nChange = 0;
+    // if (fNoChange) {
+    // We're sending alot! So we've got to deduct the fee from the send amount. There's not enough change to pay it with!
+    //   value = Number((value - nFee).toFixed(8));
+    // }
 
-    if (address !== '' && value !== '') {
-      addoutput(address, value); // Sending to this address
-      addresschange = domGuiAddressRef.current.innerHTML;
-      totalSent = (nFee + parseFloat(value)).toFixed(8);
-      valuechange = fNoChange ? 0 : (txValue - parseFloat(totalSent)).toFixed(8);
-      if (totalSent <= nBalance) {
-        if (debug)
-          domHumanReadable.innerHTML = "Balance: " + nBalance.toFixed(8) + "<br>Fee: " + nFee + "<br>To: " + address + "<br>Sent: " + value + (fNoChange ? "" : "<br>Change Address: " + addresschange + "<br>Change: " + valuechange);
-        if (!fNoChange) {
-          addoutput(addresschange, valuechange); // Change Output
-        }
-        sendTransaction(i18n, sign(privateKeyForTransactions, 1));
-        domGenIt.innerHTML = "Continue";
-      } else {
-        console.warn("Amount: " + value + "\nFee: " + nFee + (fNoChange ? "" : "\nChange: " + valuechange) + "\nTOTAL: " + totalSent);
-        createAlert(i18n, 'warning', "You're trying to send more than you have!", "", "", "", 2500);
-      }
+    // if (address && value) {
+    //   addoutput(address, value); // Sending to this address
+    //   addresschange = domGuiAddressRef.current.innerHTML;
+    //   totalSent = (nFee + parseFloat(value)).toFixed(8);
+    //   valuechange = fNoChange ? 0 : ((cCoinControl.nValue / COIN) - parseFloat(totalSent)).toFixed(8);
+    //   if (totalSent <= nBalance) {
+    //     if (debug)
+    //       domHumanReadable.innerHTML = "Balance: " + nBalance.toFixed(8) + "<br>Fee: " + nFee + "<br>To: " + address + "<br>Sent: " + value + (fNoChange ? "" : "<br>Change Address: " + addresschange + "<br>Change: " + valuechange);
+    //     if (!fNoChange) {
+    //       addoutput(addresschange, valuechange); // Change Output
+    //     }
+    //     sendTransaction(i18n, sign(privateKeyForTransactions, 1));
+    //     domGenIt.innerHTML = "Continue";
+    //   } else {
+    //     console.warn("Amount: " + value + "\nFee: " + nFee + (fNoChange ? "" : "\nChange: " + valuechange) + "\nTOTAL: " + totalSent);
+    //     createAlert(i18n, 'warning', "You're trying to send more than you have!", "", "", "", 2500);
+    //   }
+    //   nValue -= nFee;
+    // } else {
+    const nChange = cCoinControl.nValue - (nFee + nValue);
+    if (nChange > 0) {
+      // Change output
+      // nChange = cCoinControl.nValue - (nFee + nValue);
+      addoutput(domGuiAddressRef.current.innerHTML, nChange / COIN);
     } else {
-      console.log("No address or value");
+      // We're sending alot! So we deduct the fee from the send amount. There's not enough change to pay it with!
+      nValue -= nFee;
     }
+    // Primary output (receiver)
+    addoutput(address, nValue / COIN);
+
+    // Debug-only verbose response
+    if (debug) domHumanReadable.innerHTML = "Balance: " + (nBalance / COIN) + "<br>Fee: " + (nFee / COIN) + "<br>To: " + address + "<br>Sent: " + (nValue / COIN) + (nChange > 0 ? "<br>Change Address: " + domGuiAddressRef.current.innerHTML + "<br>Change: " + (nChange / COIN) : "");
+
+    // Sign and broadcast!
+    sendTransaction(sign(privateKeyForTransactions, 1));
+    domGenIt.innerHTML = "Continue";
   }
   function createRawTransaction() {
-    //advanced transaction creation and signing
+    // Prepare a TX
     // const cTx = bitjs.transaction();
     const txid = document.getElementById("prevTrxHash").value;
     const index = document.getElementById("index").value;
     const script = document.getElementById("script").value;
+
+    // Primary input
     addinput(txid, index, script);
-    var address = document.getElementById("address1").value;
-    var value = document.getElementById("value1").value;
-    addoutput(address, value);
-    address = document.getElementById("address2").value;
-    value = document.getElementById("value2").value;
-    addoutput(address, value);
+    // var address = document.getElementById("address1").value;
+    // var value = document.getElementById("value1").value;
+    // addoutput(address, value);
+    // address = document.getElementById("address2").value;
+    // value = document.getElementById("value2").value;
+    // addoutput(address, value);
+
+    // Primary output
+    const strAddress = document.getElementById("address1").value;
+    const nValue = document.getElementById("value1").value;
+    addoutput(strAddress, nValue);
+
+    // Change output
+    const strChange = document.getElementById("address2").value;
+    const nChangeValue = document.getElementById("value2").value;
+    addoutput(strChange, nChangeValue);
+
+    // Sign via WIF key
     const wif = document.getElementById("wif").value;
     document.getElementById("rawTrx").value = sign(wif, 1); //SIGHASH_ALL DEFAULT 1
   }
   function openTab(evt, tabName) {
-    var i, tabcontent, tablinks;
-    tabcontent = document.getElementsByClassName("tabcontent");
-    for (i = 0; i < tabcontent.length; i++) {
-      tabcontent[i].style.display = "none";
-    }
-    tablinks = document.getElementsByClassName("tablinks");
-    for (i = 0; i < tablinks.length; i++) {
-      tablinks[i].className = tablinks[i].className.replace(" active", "");
-    }
+    // var i, tabcontent, tablinks;
+    // tabcontent = document.getElementsByClassName("tabcontent");
+    // for (i = 0; i < tabcontent.length; i++) {
+    //   tabcontent[i].style.display = "none";
+    // }
+    // tablinks = document.getElementsByClassName("tablinks");
+    // for (i = 0; i < tablinks.length; i++) {
+    //   tablinks[i].className = tablinks[i].className.replace(" active", "");
+    // }
+    // Hide all screens and deactivate link highlights
+    for (const domScreen of arrDomScreens) domScreen.style.display = "none";
+    for (const domLink of arrDomScreenLinks) domLink.classList.remove("active");
+
+    // Show and activate the given screen
     document.getElementById(tabName).style.display = "block";
-    if (!evt.currentTarget.className.includes("active"))
-      evt.currentTarget.className += " active";
+    // if (!evt.currentTarget.className.includes("active"))
+    //   evt.currentTarget.className += " active";
+    evt.currentTarget.classList.add("active");
 
     // Close the navbar if it's not already closed
     if (!domNavbarTogglerRef.current.className.includes("collapsed"))
@@ -707,15 +930,18 @@ function App(props) {
   function refreshChainData() {
     // If in offline mode: don't sync ANY data or connect to the internet
     if (!networkEnabled) return console.warn(i18n.t('offline_mode'));
+    if (domGuiAddressRef.current.innerHTML === "~") return;
 
     // Update identicon
-    domIdenticonRef.current.dataset.jdenticonValue = domGuiAddressRef.current.innerHTML;
+    // domIdenticonRef.current.dataset.jdenticonValue = domGuiAddressRef.current.innerHTML;
 
     // jdenticon();
 
     // Play reload anim
-    domBalanceReloadRef.current.className += " playAnim";
-    domBalanceReloadStakingRef.current.className += " playAnim";
+    // domBalanceReloadRef.current.className += " playAnim";
+    // domBalanceReloadStakingRef.current.className += " playAnim";
+    domBalanceReloadRef.current.classList.add("playAnim");
+    domBalanceReloadStakingRef.current.classList.add("playAnim");
     // Fetch block count + UTXOs
     getBlockCount(i18n);
   }
@@ -733,6 +959,8 @@ function App(props) {
     //   }
     // });
 
+    // jdenticon.configure();
+
     // Configure payment processor
     if (requestTo && requestAmount) {
       // Open 'Create Transaction' menu
@@ -747,7 +975,7 @@ function App(props) {
         domReqDisplay.style.display = 'block';
         domReqDesc.value = urlParams.get('desc');
       } else {
-        domReqDesc.value = '';
+        // domReqDesc.value = '';
         domReqDisplay.style.display = 'none';
       }
     }
@@ -774,7 +1002,7 @@ function App(props) {
                 <li className="nav-item"><a ref={startRef} href="/#" id='start' className="nav-link tablinks" onClick={(event) => openTab(event, 'home')}>{i18n.t('Intro')}</a></li>
                 <li className="nav-item"><a className="nav-link tablinks" href="/#" onClick={(event) => openTab(event, 'keypair')}>{i18n.t('Dashboard')}</a></li>
                 <li className="nav-item"><a id="txTab" className="nav-link tablinks" href="/#" onClick={(event) => openTab(event, 'Transaction')}>{i18n.t('Send')}</a></li>
-                <li className="nav-item"><a id="txTab" className="nav-link tablinks" href="/#" onClick={(event) => openTab(event, 'StakingTab')}>{i18n.t('Stake')}</a></li>
+                <li className="nav-item"><a ref={domStakeTabRef} id="stakeTab" className="nav-link tablinks" href="/#" onClick={(event) => openTab(event, 'StakingTab')}>{i18n.t('Stake')}</a></li>
                 <li className="nav-item"><a className="nav-link tablinks" href="/#" onClick={(event) => openTab(event, 'Settings')}>{i18n.t('Settings')}</a></li>
               </ul>
               {/* Language drop down */}
@@ -791,8 +1019,8 @@ function App(props) {
               {/* SIDE NAVBAR */}
               <div className="form-inline my-2 my-lg-0">
                 <ul className="navbar-nav mr-auto ptr">
-                  <li className="nav-item"><a className="nav-link tablinks active" href="/#" id="Network"><b>{i18n.t('Network')}: </b>{networkEnabled ? i18n.t('Enabled') : i18n.t('Disabled')}</a></li>
-                  <li className="nav-item"><a className="nav-link tablinks active" href="/#" id="Debug">{debug ? <b>{i18n.t('debug_on')}</b> : ''}</a></li>
+                  <li className="nav-item"><a className="nav-link tablinks active" href="/#" id="Network" onClick={() => toggleNetwork()}><b>{i18n.t('Network')}: </b>{networkEnabled ? i18n.t('Enabled') : i18n.t('Disabled')}</a></li>
+                  <li className="nav-item"><a className="nav-link tablinks active" href="/#" id="Debug" onClick={() => toggleDebug()}>{debug ? <b>{i18n.t('debug_on')}</b> : ''}</a></li>
                 </ul>
               </div>
 
@@ -1023,7 +1251,7 @@ function App(props) {
                             <b ref={domGuiAddressRef} id="guiAddress">~</b>
                             <b id="guiQRButton">
                               <i data-toggle="modal" data-target="#qrModal" className="fas fa-qrcode fa-stacked-ptr"></i>
-                              <i onClick={() => toClipboard('guiAddress', 'guiAddressCopy')} id="guiAddressCopy" className="fas fa-clipboard fa-stacked-ptr"></i>
+                              <i onClick={(e) => toClipboard('guiAddress', e.target)} id="guiAddressCopy" className="fas fa-clipboard fa-stacked-ptr"></i>
                             </b>
                           </div>
                         </div>
@@ -1104,7 +1332,7 @@ function App(props) {
                     </div>
                     {/* IMPORT WALLET  */}
 
-                    <button ref={domAccessWalletBtnRef} className="pivx-button-big" id="accessWalletBtn" onClick={() => toggleWallet()}>
+                    <button ref={domAccessWalletBtnRef} className="pivx-button-big" id="accessWalletBtn" onClick={() => accessOrImportWallet()}>
                       <span className="buttoni-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 70"><path d="M3.497 25.717C1.401 25.588 0 23.847 0 21.753v-2.535c0-.775.149-1.593.925-1.593h22.719c2.173 0 3.941 1.861 3.941 4.034 0 2.174-1.769 3.988-3.941 3.988l-20.207.048c-.02 0 .08.023.06.022z"></path><path d="M5.229 69.625C4.455 69.625 4 68.494 4 67.719V38.661c0-1.911 1.447-3.731 3.258-3.989.175-.029.285-.047.483-.047h21.525c7.137 0 12.751-5.86 12.751-13.027 0-7.096-5.528-12.841-12.586-13.177-.002 0-.671.016-1.41.016l-20.335.066C5.529 8.373 4 6.652 4 4.558V2.023C4 1.247 4.407.625 5.183.625h24.059c11.57 0 20.654 9.546 20.706 21.104 0 9.378-6.307 17.727-15.337 20.311-1.622.445-3.122.705-4.735.778L12 42.842v22.485c0 2.156-2.141 4.298-4.235 4.298H5.229z"></path></svg></span>
 
                       <span className="buttoni-text" ref={wToggleRef} id='wToggle'>{i18n.t('Access My Wallet')}</span>
@@ -1194,7 +1422,7 @@ function App(props) {
                     <input className="center-text" style={{ width: '100%', fontFamily: 'monospace' }} type="text" id="address1s" />
                     <br />
                     <label>{i18n.t('Amount')}</label><br />
-                    <input className="center-text" type="number" min="0" id="value1s" />
+                    <input className="center-text" type="text" id="value1s" />
                     <div id="reqDescDisplay" style={{ display: 'none' }}>
                       <label>{i18n.t('Description (from the merchant)')}</label><br />
                       <input className="center-text" type="text" disabled id="reqDesc" />
@@ -1202,7 +1430,7 @@ function App(props) {
                     <br />
                     <div id='HumanReadable'></div>
                     <br />
-                    <button className="pivx-button-big" onClick={() => createSimpleTransation()}>
+                    <button className="pivx-button-big" onClick={() => createTxGUI()}>
                       <span className="buttoni-icon"><i className="fas fa-paper-plane fa-tiny-margin"></i></span>
                       <span className="buttoni-text" id="genIt">{i18n.t('Send Transaction')}</span>
                       <span className="buttoni-arrow"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M23.328 16.707L13.121 26.914a.5.5 0 01-.707 0l-2.828-2.828a.5.5 0 010-.707L16.964 16 9.586 8.621a.5.5 0 010-.707l2.828-2.828a.5.5 0 01.707 0l10.207 10.207a1 1 0 010 1.414z"></path></svg></span>

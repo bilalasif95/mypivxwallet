@@ -439,4 +439,4 @@ export function hasEncryptedWallet() {
   return localStorage.getItem("encwif") ? true : false;
 }
 
-export { publicKeyForNetwork };
+export { publicKeyForNetwork, privateKeyForTransactions };

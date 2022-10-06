@@ -223,9 +223,10 @@ function bnNegate() { var r = nbi(); BigInteger.ZERO.subTo(this, r); return r; }
 // (public) |this|
 function bnAbs() { return (this.s < 0) ? this.negate() : this; }
 
+let s = 0, t;
 // (public) return + if this > a, - if this < a, 0 if equal
-function bnCompareTo(a) {
-  var r = this.s - a.s;
+export function bnCompareTo(a) {
+  var r = (this ? this.s : s) - (a ? a.s : a);
   if (r !== 0) return r;
   var i = this.t;
   r = i - a.t;
@@ -961,7 +962,7 @@ function barrettConvert(x) {
 function barrettRevert(x) { return x; }
 
 // x = x mod m (HAC 14.42)
-function barrettReduce(x) {
+export function barrettReduce(x) {
   var self = this;
   x.drShiftTo(self.m.t - 1, self.r2);
   if (x.t > self.m.t + 1) { x.t = self.m.t + 1; x.clamp(); }
@@ -1293,6 +1294,57 @@ BigInteger.prototype.toByteArraySigned = function () {
   }
 
   return val;
+};
+
+
+function bnAbss() { return (s < 0) ? this.negate() : this; }
+
+const DM = ((1 << dbits) - 1);
+
+const bnToByteArrayy = () => {
+  var self = this;
+  var i = t, r = new Array([]);
+  r[0] = s;
+  var p = dbits - (i * dbits) % 8, d, k = 0;
+  if (i-- > 0) {
+    if (p < dbits && (d = self[i] >> p) !== (s & DM) >> p)
+      r[k++] = d | (s << (dbits - p));
+    while (i >= 0) {
+      if (p < 8) {
+        d = (self[i] & ((1 << p) - 1)) << (8 - p);
+        d |= self[--i] >> (p += dbits - 8);
+      }
+      else {
+        d = (self[i] >> (p -= 8)) & 0xff;
+        if (p <= 0) { p += dbits; --i; }
+      }
+      if ((d & 0x80) !== 0) d |= -256;
+      if (k === 0 && (s & 0x80) !== (d & 0x80)) ++k;
+      if (k > 0 || d !== s) r[k++] = d;
+    }
+  }
+  return r;
+}
+
+export function toByteArrayUnsigned() {
+  var ba = bnAbss()
+  ba = bnToByteArrayy();
+  // Empty array, nothing to do
+  if (!ba.length) {
+    return ba;
+  }
+
+  // remove leading 0
+  if (ba[0] === 0) {
+    ba = ba.slice(1);
+  }
+
+  // all values must be positive
+  for (var i = 0; i < ba.length; ++i) {
+    ba[i] = (ba[i] < 0) ? ba[i] + 256 : ba[i];
+  }
+
+  return ba;
 };
 
 export { BigInteger, Barrett };

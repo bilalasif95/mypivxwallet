@@ -13,14 +13,17 @@ function networkError(i18n) {
 }
 
 let cachedBlockCount = 0;
+let arrDelegatedUTXOs = [];
 let cachedUTXOs = [];
 if (networkEnabled) {
   var getBlockCount = function (i18n) {
     axios.get(cExplorer.url + "/api/v2/api").then((response) => {
       const data = response.data;
       // If the block count has changed, refresh all of our data!
-      domBalanceReloadRef.current.className = domBalanceReloadRef.current.className.replace(/ playAnim/g, "");
-      domBalanceReloadStakingRef.current.className = domBalanceReloadStakingRef.current.className.replace(/ playAnim/g, "");
+      // domBalanceReloadRef.current.className = domBalanceReloadRef.current.className.replace(/ playAnim/g, "");
+      // domBalanceReloadStakingRef.current.className = domBalanceReloadStakingRef.current.className.replace(/ playAnim/g, "");
+      domBalanceReloadRef.current.classList.remove("playAnim");
+      domBalanceReloadStakingRef.current.classList.remove("playAnim");
       if (data.backend.blocks > cachedBlockCount) {
         console.log("New block detected! " + cachedBlockCount + " --> " + data.backend.blocks);
         if (publicKeyForNetwork)
@@ -71,7 +74,6 @@ if (networkEnabled) {
   //   getDelegatedUTXOs(i18n);
   // }
   var arrUTXOsToValidate = [];
-  let arrDelegatedUTXOs = [];
 
   var getBalance = (updateGUI) => {
     const nBalance = cachedUTXOs.reduce((a, b) => a + b.sats, 0);
@@ -111,41 +113,43 @@ if (networkEnabled) {
     axios.get(cExplorer.url + "/api/v2/tx-specific/" + arrUTXOsToValidate[0].txid).then((response) => {
       const data = response.data
 
-      for (const cVout of data.vout) {
-        // TODO: Determine if this is useful or not? I don't remember what this is, or why I added it.
-        if (cVout.spent) continue;
-        // if (cVout.scriptPubKey.type === 'coldstake' && cVout.scriptPubKey.addresses.includes(domGuiAddressRef.current.innerHTML)) {
-        //   if (!arrDelegatedUTXOs.find(a => a.id === data.txid && a.vout === cVout.n)) {
-        //     arrDelegatedUTXOs.push({
-        //       'id': data.txid,
-        //       'vout': cVout.n,
-        //       'sats': Number(cVout.value * COIN),
-        //       'script': cVout.scriptPubKey.hex
-        //     });
-        //   }
+      // for (const cVout of data.vout) {
+      // TODO: Determine if this is useful or not? I don't remember what this is, or why I added it.
+      // if (cVout.spent) continue;
+      // if (cVout.scriptPubKey.type === 'coldstake' && cVout.scriptPubKey.addresses.includes(domGuiAddressRef.current.innerHTML)) {
+      //   if (!arrDelegatedUTXOs.find(a => a.id === data.txid && a.vout === cVout.n)) {
+      //     arrDelegatedUTXOs.push({
+      //       'id': data.txid,
+      //       'vout': cVout.n,
+      //       'sats': Number(cVout.value * COIN),
+      //       'script': cVout.scriptPubKey.hex
+      //     });
+      //   }
 
-        // Search for our address
-        if (!cVout.scriptPubKey.addresses) continue;
-        if (!cVout.scriptPubKey.addresses.includes(publicKeyForNetwork)) continue;
+      // Search for our address
+      // if (!cVout.scriptPubKey.addresses) continue;
+      // if (!cVout.scriptPubKey.addresses.includes(publicKeyForNetwork)) continue;
 
-        // Convert to MPW format
-        const cUTXO = {
-          'id': data.txid,
-          'vout': cVout.n,
-          'sats': cVout.value * COIN,
-          'script': cVout.scriptPubKey.hex
-        }
-
-        // Determine the UTXO type, and use it accordingly
-        if (cVout.scriptPubKey.type === 'pubkeyhash') {
-          // P2PKH type (Pay-To-Pub-Key-Hash)
-          cachedUTXOs.push(cUTXO);
-        } else
-          if (cVout.scriptPubKey.type === 'coldstake') {
-            // Cold Stake type
-            arrDelegatedUTXOs.push(cUTXO);
-          }
+      // Fetch the single output of the UTXO
+      const cVout = data.vout[arrUTXOsToValidate[0].vout];
+      // Convert to MPW format
+      const cUTXO = {
+        'id': arrUTXOsToValidate[0].txid,
+        'vout': cVout.n,
+        'sats': Math.round(cVout.value * COIN),
+        'script': cVout.scriptPubKey.hex
       }
+
+      // Determine the UTXO type, and use it accordingly
+      if (cVout.scriptPubKey.type === 'pubkeyhash') {
+        // P2PKH type (Pay-To-Pub-Key-Hash)
+        cachedUTXOs.push(cUTXO);
+      } else
+        if (cVout.scriptPubKey.type === 'coldstake') {
+          // Cold Stake type
+          arrDelegatedUTXOs.push(cUTXO);
+        }
+      // }
       // arrUTXOsToSearch.shift();
 
       // Shift the queue and update the UI
@@ -210,10 +214,10 @@ if (networkEnabled) {
     })
   }
 
-  var calculatefee = function (bytes) {
+  var getFee = function (bytes) {
     // TEMPORARY: Hardcoded fee per-byte
-    return (bytes * 50) / COIN; // 50 sat/byte
+    return bytes * 50; // 50 sat/byte
   }
 }
 
-export { getUTXOs, getBalance, getStakingBalance, cachedUTXOs, calculatefee, sendTransaction, getBlockCount };
+export { getUTXOs, getBalance, getStakingBalance, cachedUTXOs, arrDelegatedUTXOs, getFee, sendTransaction, getBlockCount };

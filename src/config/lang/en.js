@@ -107,7 +107,7 @@ export const en = {
 		"Please wait for confirmations, enjoy your staking!": "Please wait for confirmations, enjoy your staking!",
 		"You are trying to send more than you have!": "You are trying to send more than you have!",
 		"offline_send": "Cannot create Simple Transactions in offline mode; this requires an explorer to sync your balance (UTXOs), please enable Networking to use this feature! Otherwise, use 'Advanced Transactions'",
-		"offline_mode": "Offline mode: For your security, the wallet will avoid ALL internet requests in offline mode.",
+		"offline_mode": "Offline mode active: For your security, the wallet will avoid ALL internet requests.",
 		
 	"_comments9": "Section: This is for the network.js",	
 		"Failed to synchronize!": "Failed to synchronize!",
@@ -160,4 +160,14 @@ export const en = {
 		"Please ENCRYPT and/or BACKUP your keys before leaving, or you may lose them!": "Please ENCRYPT and/or BACKUP your keys before leaving, or you may lose them!",
 		"Dashboard ➜ Set Password": "Dashboard ➜ Set Password",
 		"Save your wallet!": "Save your wallet!",
+		"Offline Mode is active!": "Offline Mode is active!",
+		"Please disable Offline Mode for automatic transactions": "Please disable Offline Mode for automatic transactions",
+		"Here, use the Stake screen, not the Send screen!": "Here, use the Stake screen, not the Send screen!",
+		"Bad length": "Bad length ( {{name}} )",
+		"Invalid PIVX address!": "Invalid PIVX address!",
+		"Bad prefix": "Bad prefix {{name}}",
+		"Should start with": "(Should start with {{name}})",
+		"You can't send nothing!": "You can't send nothing!",
+		"Invalid amount!": "Invalid amount!",
+		"8 decimal limit exceeded": "8 decimal limit exceeded",
 }
