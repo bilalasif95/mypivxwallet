@@ -170,4 +170,6 @@ export const it = {
 		"You can't send nothing!": "You can't send nothing!",
 		"Invalid amount!": "Invalid amount!",
 		"8 decimal limit exceeded": "8 decimal limit exceeded",
+		"Switched analytics level!": "Switched analytics level!",
+		"Now": "Now {{name}}",
 }

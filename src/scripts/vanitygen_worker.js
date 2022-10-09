@@ -12,9 +12,10 @@ import { Secp256k1 } from "./libs/secp256k1";
 import { getPublicKey, bytesToHex } from "./libs/noble-secp256k1";
 import jsSHA from "./libs/sha256";
 import { ripemd160 } from "./libs/ripemd160";
+import { cExplorer } from "../App";
 
 /* chainparams */
-const PUBKEY_ADDRESS = 30;
+const PUBKEY_ADDRESS = cExplorer.name === "SWITCH to testnet" ? 139 : 30;
 // const SECRET_KEY = 212;
 
 // importScripts('libs/noble-secp256k1.js', 'libs/bn.js', 'libs/secp256k1.js', 'libs/crypto-min.js', 'libs/crypto-sha256-hmac.js', 'libs/crypto-sha256.js', 'libs/jsbn.js', 'libs/ripemd160.js', 'libs/sha256.js');

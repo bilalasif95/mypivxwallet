@@ -3,7 +3,7 @@ import { withTranslation } from 'react-i18next'
 import { createRef, useEffect, useState } from 'react';
 // import { debug, networkEnabled, toggleDebug, toggleNetwork } from "./scripts/settings";
 import { hasEncryptedWallet, decryptWallet, importWallet, generateWallet, encryptWallet, privateKeyForTransactions } from "./scripts/wallet";
-import { getFee, sendTransaction, getBlockCount, getBalance, getStakingBalance, cachedUTXOs, arrDelegatedUTXOs } from "./scripts/network";
+import { getFee, sendTransaction, getBlockCount, getBalance, getStakingBalance, cachedUTXOs, arrDelegatedUTXOs, submitAnalytics } from "./scripts/network";
 import { addcoldstakingoutput, addinput, serialize, addoutput, sign } from "./scripts/bitTrx";
 import { createAlert } from "./scripts/misc";
 // import { jdenticon } from "./scripts/libs/jdenticon.min";
@@ -43,15 +43,40 @@ const domAvailToUndelegateRef = createRef();
 const domGuiBalanceBoxStakingRef = createRef();
 var networkEnabledVar = true;
 const domStakeTabRef = createRef();
+const domAnalyticsDescriptorRef = createRef();
+const domExplorerSelectRef = createRef();
+const domAnalyticsSelectRef = createRef();
 
 // A list of Labs-trusted explorers
 const arrExplorers = [
   // Display name      Blockbook-compatible API base   
   { name: "SWITCH to testnet", url: "https://testnet.rockdev.org" },
-  { name: "zkBitcoin", url: "https://zkbitcoin.com" },
   { name: "rockdev", url: "https://explorer.rockdev.org" },
+  { name: "zkBitcoin", url: "https://zkbitcoin.com" },
 ]
 var cExplorer = arrExplorers[0];
+
+// A list of statistic keys and their descriptions
+const STATS = {
+  // Stat key   // Description of the stat, it's data, and it's purpose
+  hit: "A ping indicating an app load, no unique data is sent.",
+  time_to_sync: "The time in seconds it took for MPW to last synchronise.",
+  transaction: "A ping indicating a Tx, no unique data is sent, but may be inferred from on-chain time."
+}
+Object.freeze(STATS);
+
+const cStatKeys = Object.keys(STATS);
+
+// A list of Analytics 'levels' at which the user may set depending on their privacy preferences
+const arrAnalytics = [
+  // Statistic level  // Allowed statistics
+  { name: "Disabled", stats: [] },
+  { name: "Minimal", stats: [STATS.hit, STATS.time_to_sync] },
+  { name: "Balanced", stats: [STATS.hit, STATS.time_to_sync, STATS.transaction] }
+]
+
+var cAnalyticsLevel = arrAnalytics[2];
+
 
 function App(props) {
   // var privateKeyForTransactions;
@@ -84,32 +109,88 @@ function App(props) {
   useEffect(() => {
     i18n.changeLanguage(localStorage.getItem("i18nextLng"));
     startRef.current.click();
+    // Fetch settings from LocalStorage
+    const strSettingExplorer = localStorage.getItem('explorer');
+    const strSettingAnalytics = localStorage.getItem('analytics');
+
+    // For any that exist: load them, or use the defaults
+    setExplorer(true, arrExplorers.find(a => a.url === strSettingExplorer) || cExplorer, true);
+    // Honour the "Do Not Track" header by default
+    if (!strSettingAnalytics && navigator.doNotTrack === "1") {
+      // Disabled
+      setAnalytics(arrAnalytics[0], true);
+      domAnalyticsDescriptorRef.current.innerHTML = '<h6 style="color:#dcdf6b;font-family:mono !important;"><pre style="color: inherit;">Analytics disabled to honour "Do Not Track" browser setting, you may manually enable if desired, though!</pre></h6>';
+    } else {
+      // Load from storage, or use defaults
+      setAnalytics(cAnalyticsLevel = arrAnalytics.find(a => a.name === strSettingAnalytics) || cAnalyticsLevel, true);
+    }
+
+    // And update the UI to reflect them
+    domExplorerSelectRef.current.value = cExplorer.url;
+    domAnalyticsSelectRef.current.value = cAnalyticsLevel.name;
   }, []);
 
   const [cExplorerr, setcExplorer] = useState(arrExplorers[0]);
 
-  function setExplorer(explorer) {
-    createAlert(i18n, 'warning', 'Please ENCRYPT and/or BACKUP your keys before leaving, or you may lose them!', "", "", "", 1000);
-    setTimeout(() => {
-      if (window.confirm('Are you sure you have backed up your keys?')) {
-        createAlert(i18n, 'success', 'Now using', "", "", "", 3500, "", "", "", explorer.name === "SWITCH to testnet" ? "testnet" : explorer.name, "Switched explorer!");
-        setcExplorer(explorer)
-        cExplorer = explorer;
-        localStorage.removeItem("encwif");
-        domGenKeyWarningRef.current.style.display = 'none';
-        domGuiWalletRef.current.style.display = 'none';
-        domGenerateWalletRef.current.style.display = 'block';
-        domGenVanityWalletRef.current.style.display = 'block';
-        domAccessWalletRef.current.style.display = 'block';
-        enableNetwork();
-      } else {
-        // Do nothing!
-      }
-    }, 100)
+  function setExplorer(loaded, explorer, fSilent = false) {
+    if (loaded) {
+      setcExplorer(explorer)
+      cExplorer = explorer;
+      localStorage.setItem('explorer', explorer.url);
+
+      // Enable networking + notify if allowed
+      enableNetwork();
+      if (!fSilent) createAlert(i18n, 'success', 'Now using', "", "", "", 2250, "", "", "", explorer.name === "SWITCH to testnet" ? "testnet" : explorer.name, "Switched explorer!");
+    }
+    else {
+      createAlert(i18n, 'warning', 'Please ENCRYPT and/or BACKUP your keys before leaving, or you may lose them!', "", "", "", 1000);
+      setTimeout(() => {
+        if (window.confirm('Are you sure you have backed up your keys?')) {
+          if (!fSilent) createAlert(i18n, 'success', 'Now using', "", "", "", 2250, "", "", "", explorer.name === "SWITCH to testnet" ? "testnet" : explorer.name, "Switched explorer!");
+          setcExplorer(explorer)
+          cExplorer = explorer;
+          localStorage.removeItem("encwif");
+          domGenKeyWarningRef.current.style.display = 'none';
+          domGuiWalletRef.current.style.display = 'none';
+          domGenerateWalletRef.current.style.display = 'block';
+          domGenVanityWalletRef.current.style.display = 'block';
+          domAccessWalletRef.current.style.display = 'block';
+          domAccessWalletBtnRef.current.style.display = 'inline-block';
+    
+          localStorage.setItem('explorer', explorer.url);
+
+          // Enable networking + notify if allowed
+          enableNetwork();
+        } else {
+          // Do nothing!
+        }
+      }, 100)
+    }
+  }
+
+  function setAnalytics(level, fSilent = false) {
+    cAnalyticsLevel = level;
+    localStorage.setItem('analytics', level.name);
+    // For total transparency, we'll 'describe' the various analytic keys of this chosen level
+    let strDesc = '<center>--- Transparency Report ---</center><br>', i = 0;
+    const nLongestKeyLen = cStatKeys.reduce((prev, e) => prev.length >= e.length ? prev : e).length;
+    for (i; i < cAnalyticsLevel.stats.length; i++) {
+      const cStat = cAnalyticsLevel.stats[i];
+      // This formats Stat keys into { $key $(padding) $description }
+      strDesc += cStatKeys.find(a => STATS[a] === cStat).padEnd(nLongestKeyLen, ' ') + ': ' + cStat + '<br>';
+    }
+
+    // Set display + notify if allowed
+    domAnalyticsDescriptorRef.current.innerHTML = cAnalyticsLevel.name === arrAnalytics[0].name ? '' : '<h6 style="color:#dcdf6b;font-family:mono !important;"><pre style="color: inherit;">' + strDesc + '</pre></h6>';
+    if (!fSilent) createAlert(i18n, 'success', 'Now', "", "", "", 2250, "", "", "", cAnalyticsLevel.name, "Switched analytics level!");
+  }
+  // Hook up the 'analytics' select UI
+  const onAnalyticsChange = (evt) => {
+    setAnalytics(arrAnalytics.find(a => a.name === evt.target.value));
   }
 
   const onExplorerChange = (evt) => {
-    setExplorer(arrExplorers.find(a => a.url === evt.target.value));
+    setExplorer(false, arrExplorers.find(a => a.url === evt.target.value));
   }
 
   //  IMPORTANT: CHAIN PARAMS BELOW, DO NOT EDIT UNLESS YOU'RE ABSOLUTELY CERTAIN YOU KNOW WHAT YOU'RE DOING
@@ -118,7 +199,7 @@ function App(props) {
   // These below params share the same names as the CPP params, so finding and editing these is easy-peasy!
 
   /* chainparams */
-  const PUBKEY_PREFIX = cExplorerr.name === "SWITCH to testnet" ? "Y" : "D";
+  const PUBKEY_PREFIX = cExplorerr.name === "SWITCH to testnet" ? "y" : "D";
   const PUBKEY_ADDRESS = cExplorerr.name === "SWITCH to testnet" ? 139 : 30;
   const SECRET_KEY = cExplorerr.name === "SWITCH to testnet" ? 239 : 212;
   const COIN = 1e8;
@@ -694,72 +775,6 @@ function App(props) {
     domGenIt.innerHTML = "Continue";
   }
 
-  // function preimage(nValue, hex) {
-  //   // if (!domGuiAddressRef.current.innerHTML) {
-  //   //   if (hasEncryptedWallet())
-  //   //     alert(i18n.t("Please unlock your wallet before sending transactions!"));
-  //   //   else
-  //   //     alert(i18n.t("Please import/create your wallet before sending transactions!"));
-  //   //   return;
-  //   // }
-  //   if (!hasWalletUnlocked(true)) return;
-  //   let nBalance = getBalance();
-  //   // if (value > nBalance) return alert(`${i18n.t('Balance is too small!')} (${nBalance} - ${value} = ${(nBalance - value).toFixed(8)})`);
-  //   // console.log("Constructing TX of value: " + value + " PIV");
-  //   // Loop our cached UTXOs and construct a TX
-  //   // const cTx = bitjs.transaction();
-  //   // let txValue = 0;
-  //   // for (const UTXO of cachedUTXOs) {
-  //   //   if (txValue > value) {
-  //   //     // Required Coin Control value met, yahoo!
-  //   //     // console.log("Coin Control: TX Constructed! Selected " + cTx.inputs.length + " input(s) (" + txValue + " PIV)");
-  //   //     console.log("Coin Control: TX Constructed! Selected input(s) (" + txValue + " PIV)");
-  //   //     break;
-  //   //   }
-  //   //   addinput(UTXO.id, UTXO.vout, UTXO.script);
-  //   //   txValue += UTXO.sats / COIN;
-  //   //   console.log("Coin Control: Selected input " + UTXO.id.substr(0, 6) + "(" + UTXO.vout + ")... (Added " + (UTXO.sats / COIN).toFixed(8) + " PIV - Total: " + txValue + ")");
-  //   // }
-  //   // Construct a TX and fetch Standard inputs
-  //   const cCoinControl = chooseUTXOs(cTx, nValue, 0, false);
-  //   if (!cCoinControl.success) return alert(cCoinControl.msg);
-
-  //   // Compute fee
-  //   // const nFee = getFee(serialize().length);
-  //   // // The primary output
-  //   // addpreimageoutput(hex, value);
-  //   // // addresschange = domGuiAddressRef.current.innerHTML;
-  //   // totalSent = (nFee + parseFloat(value)).toFixed(8);
-  //   // valuechange = ((cCoinControl.nValue / COIN) - parseFloat(totalSent)).toFixed(8);
-  //   // if (totalSent <= nBalance) {
-  //   //   if (debug)
-  //   //     domHumanReadable.innerHTML = "Balance: " + nBalance.toFixed(8) + "<br>Fee: " + nFee + "<br>To: " + domGuiAddressRef.current.innerHTML + "<br>Sent: " + value + "<br>Change Address: " + addresschange + "<br>Change: " + valuechange;
-  //   //   addoutput(domGuiAddressRef.current.innerHTML, valuechange); //Change Address
-  //   //   sendTransaction(i18n, sign(privateKeyForTransactions, 1));
-  //   //   domGenIt.innerHTML = "Continue";
-  //   // Compute fee and change (or lack thereof)
-  //   const nFee = getFee(serialize().length);
-  //   const nChange = cCoinControl.nValue - (nFee + nValue);
-  //   if (nChange > 0) {
-  //     // Change output
-  //     addoutput(domGuiAddressRef.current.innerHTML, nChange / COIN);
-  //   } else {
-  //     // console.warn("Amount: " + value + "\nFee: " + nFee + "\nChange: " + valuechange + "\nTOTAL: " + totalSent);
-  //     // createAlert(i18n, 'warning', 'You are trying to send more than you have!', "", "", "", 2500);
-  //     // We're sending alot! So we deduct the fee from the send amount. There's not enough change to pay it with!
-  //     nValue -= nFee;
-  //   }
-  //   // The primary output
-  //   addpreimageoutput(hex, nValue / COIN);
-
-  //   // Debug-only verbose response
-  //   if (debug) domHumanReadable.innerHTML = "Balance: " + (nBalance / COIN) + "<br>Fee: " + (nFee / COIN) + "<br>To: " + domGuiAddressRef.current.innerHTML + "<br>Sent: " + (nValue / COIN) + (nChange > 0 ? "<br>Change Address: " + domGuiAddressRef.current.innerHTML + "<br>Change: " + (nChange / COIN) : "");
-
-  //   // Sign and broadcast!
-  //   sendTransaction(sign(privateKeyForTransactions, 1));
-  //   domGenIt.innerHTML = "Continue";
-  // }
-
   function createTxGUI() {
     // if (!networkEnabled) return alert(i18n.t("offline_send"));
     // if (!domGuiAddressRef.current.innerHTML) {
@@ -979,6 +994,8 @@ function App(props) {
         domReqDisplay.style.display = 'none';
       }
     }
+    // If allowed by settings: submit a simple 'hit' (app load) to Labs Analytics
+    submitAnalytics('hit');
   });
 
   setInterval(refreshChainData, 15000);
@@ -1495,10 +1512,18 @@ function App(props) {
                 </button> */}
                 <label htmlFor="explorer">{i18n.t('Choose an explorer')}</label>
                 <br />
-                <select id="explorer" onChange={(evt) => onExplorerChange(evt)} className="form-control" name="explorer">
-                  {arrExplorers.map((res) => <option key={res.name} value={res.url}>{res.name}</option>)}
+                <select ref={domExplorerSelectRef} id="explorer" onChange={(evt) => onExplorerChange(evt)} className="form-control" name="explorer">
+                  {arrExplorers.map((res) => <option key={res.name} value={res.url}>{res.name + ' (' + res.url.replace('https://', '') + ')'}</option>)}
                 </select>
                 {/* </form> */}
+                <br />
+
+                <label htmlFor="analytics">Choose your analytics contribution level:</label>
+                <br />
+                <select ref={domAnalyticsSelectRef} id="analytics" onChange={(evt) => onAnalyticsChange(evt)} className="form-control" name="analytics">
+                  {arrAnalytics.map((res) => <option key={res.name} value={res.name}>{res.name}</option>)}
+                </select>
+                <div ref={domAnalyticsDescriptorRef} id='analyticsDescriptor'></div>
                 <br />
 
                 <button className="pivx-button-big" onClick={() => toggleDebug()}>
@@ -1520,8 +1545,7 @@ function App(props) {
 
       {/* Alert */}
 
-      <div className="alertPositioning">
-      </div>
+      <div className="alertPositioning"></div>
       <footer id="foot">
         <div className="footer">
           <div id='dcfooter'>
@@ -1534,7 +1558,7 @@ function App(props) {
 }
 
 export default withTranslation()(App);
-export { privateKeyRef, errorNoticeRef, domGuiBalanceBoxStakingRef, domAvailToUndelegateRef, domAvailToDelegateRef, domGuiBalanceStakingRef, networkEnabledVar, cExplorer, domGenKeyWarningRef, domBalanceReloadRef, domBalanceReloadStakingRef, domPrivateTxtRef, guiViewKeyRef, domGuiAddressRef, domGuiBalanceRef, domGuiBalanceBoxRef, domPrivateQrRef, domPublicQrRef, domModalQrLabelRef, domModalQRRef, domIdenticonRef, domGuiWalletRef, domPrefixRef, domGenerateWalletRef, domImportWalletRef, domGenVanityWalletRef, domAccessWalletRef };
+export { privateKeyRef, errorNoticeRef, domGuiBalanceBoxStakingRef, domAvailToUndelegateRef, domAvailToDelegateRef, domGuiBalanceStakingRef, networkEnabledVar, cAnalyticsLevel, cExplorer, cStatKeys, STATS, domGenKeyWarningRef, domBalanceReloadRef, domBalanceReloadStakingRef, domPrivateTxtRef, guiViewKeyRef, domGuiAddressRef, domGuiBalanceRef, domGuiBalanceBoxRef, domPrivateQrRef, domPublicQrRef, domModalQrLabelRef, domModalQRRef, domIdenticonRef, domGuiWalletRef, domPrefixRef, domGenerateWalletRef, domImportWalletRef, domGenVanityWalletRef, domAccessWalletRef };
 export const domAddress1s = document.getElementById("address1s");
 export const domTxOutput = document.getElementById("transactionFinal");
 export const domSimpleTXs = document.getElementById("simpleTransactions");

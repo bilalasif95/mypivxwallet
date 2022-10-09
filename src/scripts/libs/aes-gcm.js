@@ -6,31 +6,30 @@ const base64_to_buf = (b64) =>
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
-export async function encrypt(i18n, data, strPassword) {
-  const password = strPassword || window.prompt(i18n.t("Please enter your wallet encryption password"));
-  if (typeof password !== "string") return false;
-  const encryptedData = await encryptData(data, password);
-  console.log("Encrypted: '" + encryptedData + "'");
-  return encryptedData;
+export async function encrypt(i18n, data, strPassword = '') {
+  const strPass = strPassword || window.prompt(i18n.t("Please enter your wallet encryption password"));
+  if (!strPass) return false;
+  // if (typeof password !== "string") return false;
+  return await encryptData(data, strPass);
+  // console.log("Encrypted: '" + encryptedData + "'");
+  // return encryptedData;
 }
 
 export async function decrypt(i18n, data, strPassword) {
-  const password = strPassword || window.prompt(i18n.t("Please enter your wallet unlock password"));
-  if (typeof password !== "string") return false;
-  const decryptedData = await decryptData(data, password);
-  return decryptedData || "decryption failed!";
+  const strPass = strPassword || window.prompt(i18n.t("Please enter your wallet unlock password"));
+  if (!strPass) return false;
+  // if (typeof password !== "string") return false;
+  return await decryptData(data, strPass) || "decryption failed!";
+  // return decryptedData || "decryption failed!";
 }
 
-const getPasswordKey = (password) =>
-  window.crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, [
-    "deriveKey",
-  ]);
+const getPasswordKey = (password) => window.crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]);
 
 const deriveKey = (passwordKey, salt, keyUsage) =>
   window.crypto.subtle.deriveKey(
     {
       name: "PBKDF2",
-      salt: salt,
+      salt,
       iterations: 250000,
       hash: "SHA-256",
     },
@@ -62,8 +61,7 @@ async function encryptData(secretData, password) {
     buff.set(salt, 0);
     buff.set(iv, salt.byteLength);
     buff.set(encryptedContentArr, salt.byteLength + iv.byteLength);
-    const base64Buff = buff_to_base64(buff);
-    return base64Buff;
+    return buff_to_base64(buff);
   } catch (e) {
     console.log(`Error - ${e}`);
     return "";

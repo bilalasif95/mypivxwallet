@@ -2,7 +2,7 @@
 
 import { networkEnabled, disableNetwork } from "./settings";
 import { createAlert } from "./misc";
-import { domBalanceReloadRef, domGuiAddressRef, domBalanceReloadStakingRef, domGuiBalanceRef, domAvailToDelegateRef, domGuiBalanceStakingRef, domGuiBalanceBoxStakingRef, domAvailToUndelegateRef, domAddress1s, domTxOutput, domSimpleTXs, domValue1s, cExplorer } from "../App";
+import { domBalanceReloadRef, domGuiAddressRef, domBalanceReloadStakingRef, domGuiBalanceRef, domAvailToDelegateRef, domGuiBalanceStakingRef, domGuiBalanceBoxStakingRef, domAvailToUndelegateRef, domAddress1s, domTxOutput, domSimpleTXs, domValue1s, cExplorer, cAnalyticsLevel, cStatKeys, STATS } from "../App";
 import { publicKeyForNetwork } from "./wallet";
 import axios from "axios";
 
@@ -73,7 +73,7 @@ if (networkEnabled) {
   //   // In parallel, fetch Cold Staking UTXOs
   //   getDelegatedUTXOs(i18n);
   // }
-  var arrUTXOsToValidate = [];
+  var arrUTXOsToValidate = [], nTimeSyncStart = 0;;
 
   var getBalance = (updateGUI) => {
     const nBalance = cachedUTXOs.reduce((a, b) => a + b.sats, 0);
@@ -104,7 +104,10 @@ if (networkEnabled) {
 
   var acceptUTXO = (i18n) => {
     // Cancel if the queue is empty: no wasting precious bandwidth & CPU cycles!
-    if (!arrUTXOsToValidate.length) return;
+    if (!arrUTXOsToValidate.length) {
+      // If allowed by settings: submit a sync performance measurement to Labs Analytics
+      return submitAnalytics('time_to_sync', { time: (Date.now() / 1000) - nTimeSyncStart, explorer: cExplorer.name });
+    }
 
     // var arrUTXOsToSearch = [];
     // let arrDelegatedUTXOs = [];
@@ -159,7 +162,7 @@ if (networkEnabled) {
 
       // Loop validation until queue is empty
       arrUTXOsToValidate.shift();
-      if (arrUTXOsToValidate.length) acceptUTXO(i18n);
+      acceptUTXO(i18n);
     }).catch(() => {
       networkError(i18n);
     })
@@ -178,7 +181,10 @@ if (networkEnabled) {
 
       // Clear our UTXOs and begin accepting refreshed ones (TODO: build an efficient 'set merge' algo)
       cachedUTXOs = []; arrDelegatedUTXOs = [];
-      acceptUTXO(i18n);
+      if (arrUTXOsToValidate.length) {
+        nTimeSyncStart = Date.now() / 1000;
+        acceptUTXO(i18n);
+      }
     }).catch(() => {
       networkError(i18n);
     })
@@ -198,6 +204,8 @@ if (networkEnabled) {
         domAddress1s.value = '';
         domValue1s.innerHTML = '';
         createAlert(i18n, 'success', msg || 'Transaction sent!', boldMessage, "", "", msg ? (1250 + (msg.length * 50)) : 1500);
+        // If allowed by settings: submit a simple 'tx' ping to Labs Analytics
+        submitAnalytics('transaction');
       } else {
         console.log('Error sending transaction: ' + data.result);
         createAlert(i18n, 'warning', 'Transaction Failed!', "", "", "", 1250);
@@ -218,6 +226,33 @@ if (networkEnabled) {
     // TEMPORARY: Hardcoded fee per-byte
     return bytes * 50; // 50 sat/byte
   }
+}
+
+// PIVX Labs Analytics: if you are a user, you can disable this FULLY via the Settings.
+// ... if you're a developer, we ask you to keep these stats to enhance upstream development,
+// ... but you are free to completely strip MPW of any analytics, if you wish, no hard feelings.
+export function submitAnalytics(strType, cData = {}) {
+  if (!networkEnabled) return;
+
+  // Limit analytics here to prevent 'leakage' even if stats are implemented incorrectly or forced
+  let i = 0, arrAllowedKeys = [];
+  for (i; i < cAnalyticsLevel.stats.length; i++) {
+    const cStat = cAnalyticsLevel.stats[i];
+    arrAllowedKeys.push(cStatKeys.find(a => STATS[a] === cStat));
+  }
+
+  // Check if this 'stat type' was granted permissions
+  if (!arrAllowedKeys.includes(strType)) return false;
+
+  // Format
+  const cStats = { 'type': strType, ...cData };
+
+  // Send to Labs Analytics
+  const request = new XMLHttpRequest();
+  request.open('POST', "https://scpscan.net/mpw/statistic", true);
+  request.setRequestHeader('Content-Type', 'application/json');
+  request.send(JSON.stringify(cStats));
+  return true;
 }
 
 export { getUTXOs, getBalance, getStakingBalance, cachedUTXOs, arrDelegatedUTXOs, getFee, sendTransaction, getBlockCount };

@@ -372,23 +372,17 @@ const signinput = function (index, wif, sigHashType, txType = 'pubkey') {
 	const key = wif2pubkey(wif);
 	const shType = sigHashType || 1;
 	var buf = [];
-	if (txType !== 'preimage') {
-		const signature = transactionSig(index, wif, shType);
-		const sigBytes = Crypto.util.hexToBytes(signature);
-		buf.push(sigBytes.length);
-		buf = buf.concat(sigBytes);
-		if (txType === 'coldstake') {
-			// OP_FALSE to flag the redeeming of the delegation back to the Owner Address
-			buf.push(OP['FALSE']);
-		}
-		const pubkeyBytes = Crypto.util.hexToBytes(key['pubkey']);
-		buf.push(pubkeyBytes.length);
-		buf = buf.concat(pubkeyBytes);
-	} else {
-		const preimage = Crypto.util.hexToBytes(wif);
-		buf.push(preimage.length);
-		buf = buf.concat(preimage);
+	const signature = transactionSig(index, wif, shType);
+	const sigBytes = Crypto.util.hexToBytes(signature);
+	buf.push(sigBytes.length);
+	buf = buf.concat(sigBytes);
+	if (txType === 'coldstake') {
+		// OP_FALSE to flag the redeeming of the delegation back to the Owner Address
+		buf.push(OP['FALSE']);
 	}
+	const pubkeyBytes = Crypto.util.hexToBytes(key['pubkey']);
+	buf.push(pubkeyBytes.length);
+	buf = buf.concat(pubkeyBytes);
 	btrx.inputs[index].script = buf;
 	return true;
 }
@@ -511,19 +505,6 @@ export function addcoldstakingoutput(addr, addrColdStake, value) {
 // 			buf = buf.concat(addrDecoded); // address in bytes
 // 			buf.push(OP['EQUALVERIFY']);
 // 			buf.push(OP['CHECKSIG']);
-// 			o.script = buf;
-// 			return this.outputs.push(o);
-// 		}
-
-// 		btrx.addpreimageoutput = function (preimage, value) {
-// 			const o = {};
-// 			let buf = [];
-// 			// const preimageTarr = Crypto.util.hexToBytes(preimage);
-// 			o.value = new BigInteger('' + Math.round((value * 1) * 1e8), 10);
-// 			//buf.push(preimageTarr.length);
-// 			//buf = buf.concat(preimageTarr); // address in bytes
-// 			//buf.push(OP['EQUALVERIFY']);
-// 			buf.push(OP['TRUE']);
 // 			o.script = buf;
 // 			return this.outputs.push(o);
 // 		}
@@ -760,23 +741,17 @@ export function addcoldstakingoutput(addr, addrColdStake, value) {
 // 			const key = bitjs.wif2pubkey(wif);
 // 			const shType = sigHashType || 1;
 // 			var buf = [];
-// 			if (txType !== 'preimage') {
-// 				const signature = this.transactionSig(index, wif, shType);
-// 				const sigBytes = Crypto.util.hexToBytes(signature);
-// 				buf.push(sigBytes.length);
-// 				buf = buf.concat(sigBytes);
-// 				if (txType === 'coldstake') {
-// 					// OP_FALSE to flag the redeeming of the delegation back to the Owner Address
-// 					buf.push(OP['FALSE']);
-// 				}
-// 				const pubkeyBytes = Crypto.util.hexToBytes(key['pubkey']);
-// 				buf.push(pubkeyBytes.length);
-// 				buf = buf.concat(pubkeyBytes);
-// 			} else {
-// 				const preimage = Crypto.util.hexToBytes(wif);
-// 				buf.push(preimage.length);
-// 				buf = buf.concat(preimage);
+// 			const signature = this.transactionSig(index, wif, shType);
+// 			const sigBytes = Crypto.util.hexToBytes(signature);
+// 			buf.push(sigBytes.length);
+// 			buf = buf.concat(sigBytes);
+// 			if (txType === 'coldstake') {
+// 				// OP_FALSE to flag the redeeming of the delegation back to the Owner Address
+// 				buf.push(OP['FALSE']);
 // 			}
+// 			const pubkeyBytes = Crypto.util.hexToBytes(key['pubkey']);
+// 			buf.push(pubkeyBytes.length);
+// 			buf = buf.concat(pubkeyBytes);
 // 			this.inputs[index].script = buf;
 // 			return true;
 // 		}

@@ -1,14 +1,14 @@
 import { privateKeyRef, domGuiAddressRef, domGuiWalletRef, domPrivateTxtRef, domPrivateQrRef, domPublicQrRef, domModalQrLabelRef, domModalQRRef, guiViewKeyRef, domIdenticonRef, domGenKeyWarningRef, domPrefixRef, domGenerateWalletRef, domImportWalletRef, domGenVanityWalletRef, domAccessWalletRef } from "../../src/App";
-import { debug, networkEnabled } from "../scripts/settings";
+import { networkEnabled } from "../scripts/settings";
 import { getPublicKey, bytesToHex } from "./libs/noble-secp256k1";
 import { uint256 } from "./libs/secp256k1";
 import jsSHA from "./libs/sha256";
 import { ripemd160 } from "./libs/ripemd160";
-import { qrcode } from "./libs/qrcode";
+// import { qrcode } from "./libs/qrcode";
 // import { jdenticon } from "./libs/jdenticon.min";
 import { getUTXOs, getBalance, getStakingBalance } from "./network";
 import { encrypt, decrypt } from "./libs/aes-gcm";
-import { createAlert } from "./misc";
+import { createAlert, createQR } from "./misc";
 
 // Base58 Encoding Map
 const MAP_B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -81,7 +81,6 @@ var viewPrivKey;
 // const SECRET_KEY = 212;
 // const PUBKEY_ADDRESS = 30;
 // const nSecp256k1 = nobleSecp256k1.default;
-// document.getElementById('dcfooter').innerHTML = '© MIT 2022 - Built with 💜 by PIVX Labs - <b style=\'cursor:pointer\' onclick=\'openDonatePage()\'>Donate!</b><br><a href="https://github.com/PIVX-Labs/MyPIVXWallet">MyPIVXWallet</a>';
 
 // A safety mechanism enabled if the user attempts to leave without encrypting/saving their keys
 const beforeUnloadListener = (evt, i18n) => {
@@ -91,81 +90,159 @@ const beforeUnloadListener = (evt, i18n) => {
   return evt.returnValue = i18n.t("Please ENCRYPT and/or BACKUP your keys before leaving, or you may lose them!");
 };
 
+
+// Generate a new private key OR encode an existing private key from raw bytes
+const generateOrEncodePrivkey = (pkBytesToEncode, SECRET_KEY) => {
+  // Private Key Generation
+  const pkBytes = pkBytesToEncode || getSafeRand();
+  const pkNetBytesLen = pkBytes.length + 2;
+  const pkNetBytes = new Uint8Array(pkNetBytesLen);
+
+  // Network Encoding
+  pkNetBytes[0] = SECRET_KEY;           // Private key prefix (1 byte)
+  writeToUint8(pkNetBytes, pkBytes, 1); // Private key bytes  (32 bytes)
+  pkNetBytes[pkNetBytesLen - 1] = 1;    // Leading digit      (1 byte)
+
+  // Double SHA-256 hash
+  const shaObj = new jsSHA(0, 0, { "numRounds": 2 });
+  shaObj.update(pkNetBytes);
+
+  // WIF Checksum
+  const checksum = shaObj.getHash(0).slice(0, 4);
+  const keyWithChecksum = new Uint8Array(pkNetBytesLen + checksum.length);
+  writeToUint8(keyWithChecksum, pkNetBytes, 0);
+  writeToUint8(keyWithChecksum, checksum, pkNetBytesLen);
+
+  // Return both the raw bytes and the WIF format
+  return { pkBytes, strWIF: to_b58(keyWithChecksum) };
+}
+
+// Derive a Secp256k1 network-encoded public key (coin address) from raw private key bytes
+const deriveAddress = (pkBytes, PUBKEY_ADDRESS) => {
+  // Public Key Derivation
+  let nPubkey = bytesToHex(getPublicKey(pkBytes)).substr(2);
+  const pubY = uint256(nPubkey.substr(64), 16);
+  nPubkey = nPubkey.substr(0, 64);
+  const publicKeyBytesCompressed = Crypto.util.hexToBytes(nPubkey);
+  publicKeyBytesCompressed.unshift(pubY.isEven() ? 2 : 3);
+
+  // First pubkey SHA-256 hash
+  const pubKeyHashing = new jsSHA(0, 0, { "numRounds": 1 });
+  pubKeyHashing.update(publicKeyBytesCompressed);
+
+  // RIPEMD160 hash
+  const pubKeyHashRipemd160 = ripemd160(pubKeyHashing.getHash(0));
+
+  // Network Encoding
+  const pubKeyHashNetwork = new Uint8Array(pubKeyHashNetworkLen);
+  pubKeyHashNetwork[0] = PUBKEY_ADDRESS;
+  writeToUint8(pubKeyHashNetwork, pubKeyHashRipemd160, 1);
+
+  // Double SHA-256 hash
+  const pubKeyHashingS = new jsSHA(0, 0, { "numRounds": 2 });
+  pubKeyHashingS.update(pubKeyHashNetwork);
+  const pubKeyHashingSF = pubKeyHashingS.getHash(0);
+
+  // Checksum
+  const checksumPubKey = pubKeyHashingSF.slice(0, 4);
+
+  // Public key pre-base58
+  const pubKeyPreBase = new Uint8Array(pubPrebaseLen);
+  writeToUint8(pubKeyPreBase, pubKeyHashNetwork, 0);
+  writeToUint8(pubKeyPreBase, checksumPubKey, pubKeyHashNetworkLen);
+
+  // Encode as Base58 human-readable network address
+  return to_b58(pubKeyPreBase);
+}
+
 // Wallet Import
-export function importWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, newWif = false, raw = false) {
+export function importWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, newWif = false, fRaw = false) {
   const strImportConfirm = i18n.t("Do you really want to import a new address? If you haven't saved the last private key, the wallet will be LOST forever.");
   const walletConfirm = fWalletLoaded ? window.confirm(strImportConfirm) : true;
   if (walletConfirm) {
-    if (raw) {
-      const pkNetBytesLen = newWif.length + 2;
-      const pkNetBytes = new Uint8Array(pkNetBytesLen);
-      // Network Encoding
-      pkNetBytes[0] = SECRET_KEY;           // Private key prefix (1 byte)
-      writeToUint8(pkNetBytes, newWif, 1);  // Private key bytes  (32 bytes)
-      pkNetBytes[pkNetBytesLen - 1] = 1;    // Leading digit      (1 byte)
-      // Double SHA-256 hash
-      // const shaObj = new jsSHA(0, 0, { "numRounds": 2 });
-      const shaObj = 0;
-      shaObj.update(pkNetBytes);
-      // WIF Checksum
-      const checksum = shaObj.getHash(0).slice(0, 4);
-      const keyWithChecksum = new Uint8Array(pkNetBytesLen + checksum.length);
-      writeToUint8(keyWithChecksum, pkNetBytes, 0);
-      writeToUint8(keyWithChecksum, checksum, pkNetBytesLen);
-      newWif = to_b58(keyWithChecksum);
+    // if (raw) {
+    //   const pkNetBytesLen = newWif.length + 2;
+    //   const pkNetBytes = new Uint8Array(pkNetBytesLen);
+    //   // Network Encoding
+    //   pkNetBytes[0] = SECRET_KEY;           // Private key prefix (1 byte)
+    //   writeToUint8(pkNetBytes, newWif, 1);  // Private key bytes  (32 bytes)
+    //   pkNetBytes[pkNetBytesLen - 1] = 1;    // Leading digit      (1 byte)
+    //   // Double SHA-256 hash
+    //   // const shaObj = new jsSHA(0, 0, { "numRounds": 2 });
+    //   const shaObj = 0;
+    //   shaObj.update(pkNetBytes);
+    //   // WIF Checksum
+    //   const checksum = shaObj.getHash(0).slice(0, 4);
+    //   const keyWithChecksum = new Uint8Array(pkNetBytesLen + checksum.length);
+    //   writeToUint8(keyWithChecksum, pkNetBytes, 0);
+    //   writeToUint8(keyWithChecksum, checksum, pkNetBytesLen);
+    //   newWif = to_b58(keyWithChecksum);
+    // If raw bytes: purely encode the given bytes rather than generating our own bytes
+    if (fRaw) {
+      newWif = generateOrEncodePrivkey(newWif, SECRET_KEY).strWIF;
       // A raw import likely means non-user owned key (i.e: created via VanityGen), thus, we assume safety first and add an exit blocking listener
       window.addEventListener("beforeunload", (evt) => { beforeUnloadListener(evt, i18n) }, { capture: true });
     }
-    // Wallet Import Format to Private Key
-    const privkeyWIF = newWif || privateKeyRef.current.value;
-    privateKeyForTransactions = privkeyWIF;
-    if (!newWif) privateKeyRef.current.value = "";
-    const byteArryConvert = from_b58(privkeyWIF);
-    const droplfour = byteArryConvert.slice(0, byteArryConvert.length - 4);
-    const key = droplfour.slice(1, droplfour.length);
-    const privkeyBytes = key.slice(0, key.length - 1);
-    if (debug) {
-      // WIF to Private Key
-      console.log(bytesToHex(privkeyWIF));
-      console.log(bytesToHex(byteArryConvert));
-      console.log(bytesToHex(droplfour));
-      console.log(bytesToHex(privkeyBytes));
-    }
+    // // Wallet Import Format to Private Key
+    // const privkeyWIF = newWif || privateKeyRef.current.value;
+    // privateKeyForTransactions = privkeyWIF;
+    // if (!newWif) privateKeyRef.current.value = "";
+    // const byteArryConvert = from_b58(privkeyWIF);
+    // const droplfour = byteArryConvert.slice(0, byteArryConvert.length - 4);
+    // const key = droplfour.slice(1, droplfour.length);
+    // const privkeyBytes = key.slice(0, key.length - 1);
+    // if (debug) {
+    //   // WIF to Private Key
+    //   console.log(bytesToHex(privkeyWIF));
+    //   console.log(bytesToHex(byteArryConvert));
+    //   console.log(bytesToHex(droplfour));
+    //   console.log(bytesToHex(privkeyBytes));
+    // }
+    // Select WIF from internal source OR user input
+    privateKeyForTransactions = newWif || privateKeyRef.current.value;
+    privateKeyRef.current.value = "";
     // Public Key Derivation
-    let nPubkey = '';
-    let pubY;
+    // let nPubkey = '';
+    // let pubY;
     try {
       // Incase of an invalid/malformed/incompatible private key: catch and display a nice error!
-      nPubkey = bytesToHex(getPublicKey(privkeyBytes)).substr(2);
-      pubY = uint256(nPubkey.substr(64), 16);
+      // nPubkey = bytesToHex(getPublicKey(privkeyBytes)).substr(2);
+      // pubY = uint256(nPubkey.substr(64), 16);
+      const bArrConvert = from_b58(privateKeyForTransactions);
+      const bArrDropFour = bArrConvert.slice(0, bArrConvert.length - 4);
+      const bKey = bArrDropFour.slice(1, bArrDropFour.length);
+
+      // Extract raw bytes and derive the key from them
+      const pkBytes = bKey.slice(0, bKey.length - 1);
+      publicKeyForNetwork = deriveAddress(pkBytes, PUBKEY_ADDRESS);
     } catch (e) {
-      console.error(e);
-      createAlert(i18n, 'warning', 'Double-check where your key came from!', '', 'Failed to import!', 'Invalid private key', 6000);
+      // console.error(e);
+      return createAlert(i18n, 'warning', 'Double-check where your key came from!', '', 'Failed to import!', 'Invalid private key', 6000);
     }
-    nPubkey = nPubkey.substr(0, 64);
-    const publicKeyBytesCompressed = Crypto.util.hexToBytes(nPubkey);
-    publicKeyBytesCompressed.unshift(pubY.isEven() ? 0x02 : 0x03);
-    // First pubkey SHA-256 hash
-    const pubKeyHashing = new jsSHA(0, 0, { "numRounds": 1 });
-    pubKeyHashing.update(publicKeyBytesCompressed);
-    // RIPEMD160 hash
-    const pubKeyHashRipemd160 = ripemd160(pubKeyHashing.getHash(0));
-    // Network Encoding
-    const pubKeyHashNetwork = new Uint8Array(pubKeyHashNetworkLen);
-    pubKeyHashNetwork[0] = PUBKEY_ADDRESS;
-    writeToUint8(pubKeyHashNetwork, pubKeyHashRipemd160, 1);
-    // Double SHA-256 hash
-    const pubKeyHashingS = new jsSHA(0, 0, { "numRounds": 2 });
-    pubKeyHashingS.update(pubKeyHashNetwork);
-    const pubKeyHashingSF = pubKeyHashingS.getHash(0);
-    // Checksum
-    const checksumPubKey = pubKeyHashingSF.slice(0, 4);
-    // Public key pre-base58
-    const pubKeyPreBase = new Uint8Array(pubPrebaseLen);
-    writeToUint8(pubKeyPreBase, pubKeyHashNetwork, 0);
-    writeToUint8(pubKeyPreBase, checksumPubKey, pubKeyHashNetworkLen);
-    // Encode as Base58 human-readable network address
-    publicKeyForNetwork = to_b58(pubKeyPreBase);
+    // nPubkey = nPubkey.substr(0, 64);
+    // const publicKeyBytesCompressed = Crypto.util.hexToBytes(nPubkey);
+    // publicKeyBytesCompressed.unshift(pubY.isEven() ? 0x02 : 0x03);
+    // // First pubkey SHA-256 hash
+    // const pubKeyHashing = new jsSHA(0, 0, { "numRounds": 1 });
+    // pubKeyHashing.update(publicKeyBytesCompressed);
+    // // RIPEMD160 hash
+    // const pubKeyHashRipemd160 = ripemd160(pubKeyHashing.getHash(0));
+    // // Network Encoding
+    // const pubKeyHashNetwork = new Uint8Array(pubKeyHashNetworkLen);
+    // pubKeyHashNetwork[0] = PUBKEY_ADDRESS;
+    // writeToUint8(pubKeyHashNetwork, pubKeyHashRipemd160, 1);
+    // // Double SHA-256 hash
+    // const pubKeyHashingS = new jsSHA(0, 0, { "numRounds": 2 });
+    // pubKeyHashingS.update(pubKeyHashNetwork);
+    // const pubKeyHashingSF = pubKeyHashingS.getHash(0);
+    // // Checksum
+    // const checksumPubKey = pubKeyHashingSF.slice(0, 4);
+    // // Public key pre-base58
+    // const pubKeyPreBase = new Uint8Array(pubPrebaseLen);
+    // writeToUint8(pubKeyPreBase, pubKeyHashNetwork, 0);
+    // writeToUint8(pubKeyPreBase, checksumPubKey, pubKeyHashNetworkLen);
+    // // Encode as Base58 human-readable network address
+    // publicKeyForNetwork = to_b58(pubKeyPreBase);
 
     // Reaching here: the deserialisation was a full cryptographic success, so a wallet is now imported!
     fWalletLoaded = true;
@@ -173,34 +250,44 @@ export function importWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, ne
     // Display Text
     domGuiAddressRef.current.innerHTML = publicKeyForNetwork;
     domGuiWalletRef.current.style.display = 'block';
-    domPrivateTxtRef.current.value = privkeyWIF;
+    domPrivateTxtRef.current.value = privateKeyForTransactions;
     domGuiAddressRef.current.innerHTML = publicKeyForNetwork;
 
     // QR Codes
     // Private Key
-    const typeNumber = 4;
-    const errorCorrectionLevel = 'L';
-    const qrPriv = qrcode(typeNumber, errorCorrectionLevel);
-    qrPriv.addData(privkeyWIF);
-    qrPriv.make();
-    domPrivateQrRef.current.innerHTML = qrPriv.createImgTag();
-    domPrivateQrRef.current.firstChild.style.borderRadius = '8px';
+    // const typeNumber = 4;
+    // const errorCorrectionLevel = 'L';
+    // const qrPriv = qrcode(typeNumber, errorCorrectionLevel);
+    // qrPriv.addData(privkeyWIF);
+    // qrPriv.make();
+    // domPrivateQrRef.current.innerHTML = qrPriv.createImgTag();
+    // domPrivateQrRef.current.firstChild.style.borderRadius = '8px';
 
-    // Public Key
-    const qrPub = qrcode(typeNumber, errorCorrectionLevel);
-    qrPub.addData('pivx:' + publicKeyForNetwork);
-    qrPub.make();
-    domPublicQrRef.current.innerHTML = qrPub.createImgTag();
-    domPublicQrRef.current.firstChild.style.borderRadius = '8px';
+    // // Public Key
+    // const qrPub = qrcode(typeNumber, errorCorrectionLevel);
+    // qrPub.addData('pivx:' + publicKeyForNetwork);
+    // qrPub.make();
+    // domPublicQrRef.current.innerHTML = qrPub.createImgTag();
+    // domPublicQrRef.current.firstChild.style.borderRadius = '8px';
     // Pubkey Modal
+    // Private Key QR
+    createQR(privateKeyForTransactions, domPrivateQrRef.current);
+
+    // Address QR
+    createQR('pivx:' + publicKeyForNetwork, domPublicQrRef.current);
+
+    // Address Modal QR
+    createQR('pivx:' + publicKeyForNetwork, domModalQRRef.current);
     domModalQrLabelRef.current.innerHTML = 'pivx:' + publicKeyForNetwork;
-    domModalQRRef.current.innerHTML = qrPub.createImgTag();
+    // domModalQRRef.current.innerHTML = qrPub.createImgTag();
     domModalQRRef.current.firstChild.style.width = "100%";
     domModalQRRef.current.firstChild.style.height = "auto";
     domModalQRRef.current.firstChild.style.imageRendering = "crisp-edges";
+
+    // Set the address clipboard value
     document.getElementById('clipboard').value = publicKeyForNetwork;
 
-    // Set view key as public and refresh QR code
+    // Set view key as public
     viewPrivKey = true;
     viewPrivKey = !viewPrivKey;
     guiViewKeyRef.current.innerHTML = viewPrivKey ? 'Privkey QR' : 'Pubkey QR';
@@ -212,13 +299,11 @@ export function importWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, ne
     domIdenticonRef.current.dataset.jdenticonValue = publicKeyForNetwork;
     // jdenticon();
 
-    if (!newWif) {
-      // Hide the encryption warning
-      domGenKeyWarningRef.current.style.display = 'block';
-    }
+    // Hide the encryption warning if the user pasted the private key
+    if (!newWif) domGenKeyWarningRef.current.style.display = 'block';
+
     // Load UTXOs from explorer
-    if (networkEnabled)
-      getUTXOs(i18n);
+    if (networkEnabled) getUTXOs(i18n);
 
     // Hide all wallet starter options
     hideAllWalletOptions(PUBKEY_PREFIX);
@@ -265,88 +350,91 @@ export async function generateWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PR
   const strImportConfirm = i18n.t("Do you really want to import a new address? If you haven't saved the last private key, the wallet will be LOST forever.");
   const walletConfirm = fWalletLoaded && !noUI ? window.confirm(strImportConfirm) : true;
   if (walletConfirm) {
-    const pkBytes = getSafeRand();
+    // const pkBytes = getSafeRand();
     // Private Key Generation
-    const pkNetBytesLen = pkBytes.length + 2;
-    const pkNetBytes = new Uint8Array(pkNetBytesLen);
-    // Network Encoding
-    pkNetBytes[0] = SECRET_KEY;           // Private key prefix (1 byte)
-    writeToUint8(pkNetBytes, pkBytes, 1); // Private key bytes  (32 bytes)
-    pkNetBytes[pkNetBytesLen - 1] = 1;    // Leading digit      (1 byte)
-    // Double SHA-256 hash
-    const shaObj = new jsSHA(0, 0, { "numRounds": 2 });
-    shaObj.update(pkNetBytes);
-    // WIF Checksum
-    const checksum = shaObj.getHash(0).slice(0, 4);
-    const keyWithChecksum = new Uint8Array(pkNetBytesLen + checksum.length);
-    writeToUint8(keyWithChecksum, pkNetBytes, 0);
-    writeToUint8(keyWithChecksum, checksum, pkNetBytesLen);
-    // Encode as Base58 human-readable WIF
-    privateKeyForTransactions = to_b58(keyWithChecksum);
+    // const pkNetBytesLen = pkBytes.length + 2;
+    // const pkNetBytes = new Uint8Array(pkNetBytesLen);
+    // // Network Encoding
+    // pkNetBytes[0] = SECRET_KEY;           // Private key prefix (1 byte)
+    // writeToUint8(pkNetBytes, pkBytes, 1); // Private key bytes  (32 bytes)
+    // pkNetBytes[pkNetBytesLen - 1] = 1;    // Leading digit      (1 byte)
+    // // Double SHA-256 hash
+    // const shaObj = new jsSHA(0, 0, { "numRounds": 2 });
+    // shaObj.update(pkNetBytes);
+    // // WIF Checksum
+    // const checksum = shaObj.getHash(0).slice(0, 4);
+    // const keyWithChecksum = new Uint8Array(pkNetBytesLen + checksum.length);
+    // writeToUint8(keyWithChecksum, pkNetBytes, 0);
+    // writeToUint8(keyWithChecksum, checksum, pkNetBytesLen);
+    // // Encode as Base58 human-readable WIF
+    // privateKeyForTransactions = to_b58(keyWithChecksum);
+    const cPriv = generateOrEncodePrivkey(false, SECRET_KEY);
+    privateKeyForTransactions = cPriv.strWIF;
 
     // Public Key Derivation
-    let nPubkey = bytesToHex(getPublicKey(pkBytes)).substr(2);
-    const pubY = uint256(nPubkey.substr(64), 16);
-    nPubkey = nPubkey.substr(0, 64);
-    const publicKeyBytesCompressed = Crypto.util.hexToBytes(nPubkey);
-    publicKeyBytesCompressed.unshift(pubY.isEven() ? 0x02 : 0x03);
-    // First pubkey SHA-256 hash
-    const pubKeyHashing = new jsSHA(0, 0, { "numRounds": 1 });
-    pubKeyHashing.update(publicKeyBytesCompressed);
-    // RIPEMD160 hash
-    const pubKeyHashRipemd160 = ripemd160(pubKeyHashing.getHash(0));
-    // Network Encoding
-    const pubKeyHashNetwork = new Uint8Array(pubKeyHashNetworkLen);
-    pubKeyHashNetwork[0] = PUBKEY_ADDRESS;
-    writeToUint8(pubKeyHashNetwork, pubKeyHashRipemd160, 1);
-    // Double SHA-256 hash
-    const pubKeyHashingS = new jsSHA(0, 0, { "numRounds": 2 });
-    pubKeyHashingS.update(pubKeyHashNetwork);
-    const pubKeyHashingSF = pubKeyHashingS.getHash(0);
-    // Checksum
-    const checksumPubKey = pubKeyHashingSF.slice(0, 4);
-    // Public key pre-base58
-    const pubKeyPreBase = new Uint8Array(pubPrebaseLen);
-    writeToUint8(pubKeyPreBase, pubKeyHashNetwork, 0);
-    writeToUint8(pubKeyPreBase, checksumPubKey, pubKeyHashNetworkLen);
-    // Encode as Base58 human-readable network address
-    publicKeyForNetwork = to_b58(pubKeyPreBase);
+    // let nPubkey = bytesToHex(getPublicKey(pkBytes)).substr(2);
+    // const pubY = uint256(nPubkey.substr(64), 16);
+    // nPubkey = nPubkey.substr(0, 64);
+    // const publicKeyBytesCompressed = Crypto.util.hexToBytes(nPubkey);
+    // publicKeyBytesCompressed.unshift(pubY.isEven() ? 0x02 : 0x03);
+    // // First pubkey SHA-256 hash
+    // const pubKeyHashing = new jsSHA(0, 0, { "numRounds": 1 });
+    // pubKeyHashing.update(publicKeyBytesCompressed);
+    // // RIPEMD160 hash
+    // const pubKeyHashRipemd160 = ripemd160(pubKeyHashing.getHash(0));
+    // // Network Encoding
+    // const pubKeyHashNetwork = new Uint8Array(pubKeyHashNetworkLen);
+    // pubKeyHashNetwork[0] = PUBKEY_ADDRESS;
+    // writeToUint8(pubKeyHashNetwork, pubKeyHashRipemd160, 1);
+    // // Double SHA-256 hash
+    // const pubKeyHashingS = new jsSHA(0, 0, { "numRounds": 2 });
+    // pubKeyHashingS.update(pubKeyHashNetwork);
+    // const pubKeyHashingSF = pubKeyHashingS.getHash(0);
+    // // Checksum
+    // const checksumPubKey = pubKeyHashingSF.slice(0, 4);
+    // // Public key pre-base58
+    // const pubKeyPreBase = new Uint8Array(pubPrebaseLen);
+    // writeToUint8(pubKeyPreBase, pubKeyHashNetwork, 0);
+    // writeToUint8(pubKeyPreBase, checksumPubKey, pubKeyHashNetworkLen);
+    // // Encode as Base58 human-readable network address
+    // publicKeyForNetwork = to_b58(pubKeyPreBase);
+    publicKeyForNetwork = deriveAddress(cPriv.pkBytes, PUBKEY_ADDRESS);
 
     fWalletLoaded = true;
 
     // Debug Console
-    if (debug) {
-      console.log("Private Key")
-      console.log(pkNetBytes)
-      console.log("Private key plus Net Prefix and Leading Digits")
-      console.log(bytesToHex(pkNetBytes))
-      console.log("Double SHA-256 Hash")
-      console.log(shaObj.getHash(0))
-      console.log('CheckSum')
-      console.log(checksum)
-      console.log('Key With CheckSum')
-      console.log(keyWithChecksum)
-      console.log('Private Key')
-      console.log(privateKeyForTransactions)
-      console.log('Public Key')
-      console.log(publicKeyBytesCompressed)
-      console.log('Public Key Extended')
-      // console.log(bytesToHex(pubkeyExt))
-      console.log('SHA256 Public Key')
-      console.log(pubKeyHashing.getHash("HEX"))
-      console.log('RIPEMD160 Public Key')
-      console.log(pubKeyHashRipemd160)
-      console.log('PubKeyHash w/NetworkBytes')
-      console.log(pubKeyHashNetwork)
-      console.log('2x SHA256 Public Key Secound Time')
-      console.log(pubKeyHashingSF)
-      console.log("CheckSum Public Key")
-      console.log(checksumPubKey)
-      console.log("Pub Key with Checksum")
-      console.log(pubKeyPreBase)
-      console.log('Public Key Base 64')
-      console.log(publicKeyForNetwork)
-    }
+    // if (debug) {
+    //   console.log("Private Key")
+    //   console.log(pkNetBytes)
+    //   console.log("Private key plus Net Prefix and Leading Digits")
+    //   console.log(bytesToHex(pkNetBytes))
+    //   console.log("Double SHA-256 Hash")
+    //   console.log(shaObj.getHash(0))
+    //   console.log('CheckSum')
+    //   console.log(checksum)
+    //   console.log('Key With CheckSum')
+    //   console.log(keyWithChecksum)
+    //   console.log('Private Key')
+    //   console.log(privateKeyForTransactions)
+    //   console.log('Public Key')
+    //   console.log(publicKeyBytesCompressed)
+    //   console.log('Public Key Extended')
+    //   // console.log(bytesToHex(pubkeyExt))
+    //   console.log('SHA256 Public Key')
+    //   console.log(pubKeyHashing.getHash("HEX"))
+    //   console.log('RIPEMD160 Public Key')
+    //   console.log(pubKeyHashRipemd160)
+    //   console.log('PubKeyHash w/NetworkBytes')
+    //   console.log(pubKeyHashNetwork)
+    //   console.log('2x SHA256 Public Key Secound Time')
+    //   console.log(pubKeyHashingSF)
+    //   console.log("CheckSum Public Key")
+    //   console.log(checksumPubKey)
+    //   console.log("Pub Key with Checksum")
+    //   console.log(pubKeyPreBase)
+    //   console.log('Public Key Base 64')
+    //   console.log(publicKeyForNetwork)
+    // }
     if (!noUI) {
       // Display Text
       domGenKeyWarningRef.current.style.display = 'block';
@@ -357,29 +445,41 @@ export async function generateWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PR
       // domGuiBalanceBoxRef.current.style.fontSize = "x-large";
 
       // QR Codes
-      const typeNumber = 4;
-      const errorCorrectionLevel = 'L';
-      const qrPriv = qrcode(typeNumber, errorCorrectionLevel);
-      qrPriv.addData(privateKeyForTransactions);
-      qrPriv.make();
-      domPrivateQrRef.current.innerHTML = qrPriv.createImgTag();
-      domPrivateQrRef.current.firstChild.style.borderRadius = '8px';
-      const qrPub = qrcode(typeNumber, errorCorrectionLevel);
-      qrPub.addData('pivx:' + publicKeyForNetwork);
-      qrPub.make();
-      domPublicQrRef.current.innerHTML = qrPub.createImgTag();
-      domPublicQrRef.current.style.display = 'block';
-      domPublicQrRef.current.firstChild.style.borderRadius = '8px';
+      // const typeNumber = 4;
+      // const errorCorrectionLevel = 'L';
+      // const qrPriv = qrcode(typeNumber, errorCorrectionLevel);
+      // qrPriv.addData(privateKeyForTransactions);
+      // qrPriv.make();
+      // domPrivateQrRef.current.innerHTML = qrPriv.createImgTag();
+      // domPrivateQrRef.current.firstChild.style.borderRadius = '8px';
+      // const qrPub = qrcode(typeNumber, errorCorrectionLevel);
+      // qrPub.addData('pivx:' + publicKeyForNetwork);
+      // qrPub.make();
+      // domPublicQrRef.current.innerHTML = qrPub.createImgTag();
+      // domPublicQrRef.current.style.display = 'block';
+      // domPublicQrRef.current.firstChild.style.borderRadius = '8px';
+      // Private Key QR
+      createQR(privateKeyForTransactions, domPrivateQrRef.current);
+
+      // Address QR
+      createQR('pivx:' + publicKeyForNetwork, domPublicQrRef.current);
+
+      // Address Modal QR
+      createQR('pivx:' + publicKeyForNetwork, domModalQRRef.current);
       domModalQrLabelRef.current.innerHTML = 'pivx:' + publicKeyForNetwork;
-      domModalQRRef.current.innerHTML = qrPub.createImgTag();
+      // domModalQRRef.current.innerHTML = qrPub.createImgTag();
       domModalQRRef.current.firstChild.style.width = "100%";
       domModalQRRef.current.firstChild.style.height = "auto";
       domModalQRRef.current.firstChild.style.imageRendering = "crisp-edges";
+
+      // Set the address clipboard value
       document.getElementById('clipboard').value = publicKeyForNetwork;
 
       // Update identicon
       domIdenticonRef.current.dataset.jdenticonValue = publicKeyForNetwork;
       // jdenticon();
+
+      // Display the dashboard
       domGuiWalletRef.current.style.display = 'block';
       viewPrivKey = false;
       hideAllWalletOptions(PUBKEY_PREFIX);
@@ -408,10 +508,10 @@ export async function generateWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PR
 
 export async function encryptWallet(i18n, strPassword = '') {
   // Encrypt the wallet WIF with AES-GCM and a user-chosen password - suitable for browser storage
-  let encWIF = await encrypt(i18n, privateKeyForTransactions, strPassword);
-  if (typeof encWIF !== "string") return false;
+  let strEncWIF = await encrypt(i18n, privateKeyForTransactions, strPassword);
+  if (!strEncWIF) return false;
   // Set the encrypted wallet in localStorage
-  localStorage.setItem("encwif", encWIF);
+  localStorage.setItem("encwif", strEncWIF);
   // Hide the encryption warning
   domGenKeyWarningRef.current.style.display = 'none';
   // Remove the exit blocker, we can annoy the user less knowing the key is safe in their localstorage!
@@ -419,20 +519,17 @@ export async function encryptWallet(i18n, strPassword = '') {
 }
 
 export async function decryptWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, strPassword = '') {
-  // Check if there's any encrypted WIF available, if so, prompt to decrypt it
-  let encWif = localStorage.getItem("encwif");
-  if (!encWif || encWif.length < 1) {
-    console.log("No local encrypted wallet found!");
-    return false;
+  // Check if there's any encrypted WIF available
+  const strEncWIF = localStorage.getItem("encwif");
+  if (!strEncWIF || strEncWIF.length < 1) return false;
+  // Prompt to decrypt it via password
+  const strDecWIF = await decrypt(i18n, strEncWIF, strPassword);
+  if (!strDecWIF || strDecWIF === "decryption failed!") {
+    if (strDecWIF) return alert("Incorrect password!");
+  } else {
+    importWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, strDecWIF);
+    return true;
   }
-  let decWif = await decrypt(i18n, encWif, strPassword);
-  if (!decWif || decWif === "decryption failed!") {
-    if (decWif === "decryption failed!")
-      alert("Incorrect password!");
-    return false;
-  }
-  importWallet(i18n, SECRET_KEY, PUBKEY_ADDRESS, PUBKEY_PREFIX, decWif);
-  return true;
 }
 
 export function hasEncryptedWallet() {
